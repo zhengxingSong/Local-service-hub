@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "闭环 L10 · 退出：状态符合选择",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "ask", "label": "问：只在必要时问", "focus": ["quit", "ask"], "note": "没有服务在跑就直接退出；有服务在跑才弹窗，并且要列出是哪几个。" },
+      { "id": "act", "label": "做：停或留，都要等结果", "focus": ["act", "svc"], "note": "勾选停止时要等进程真正退出，否则下次启动会撞上端口占用。" },
+      { "id": "close", "label": "闭环：不要留误解", "focus": ["gone", "done"], "note": "判据是「服务状态符合用户的选择」，而不是「窗口关掉了」。" }
+    ]
+  },
+  "lanes": [
+    { "id": "ui", "label": "应用界面" },
+    { "id": "daemon", "label": "主进程" },
+    { "id": "target", "label": "被管服务" }
+  ],
+  "phases": [
+    { "id": "ask", "label": "确认", "fromCol": 0, "toCol": 1 },
+    { "id": "act", "label": "执行选择", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "close", "label": "退出与闭环", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["quit", "ask", "act", "gone"],
+  "nodes": [
+    { "id": "quit", "lane": "ui", "col": 0, "type": "frontend", "label": "点退出", "sublabel": "界面或托盘" },
+    { "id": "ask", "lane": "ui", "col": 2, "type": "frontend", "label": "确认模态", "sublabel": "列出运行中服务" },
+    { "id": "act", "lane": "daemon", "col": 2, "type": "backend", "label": "按勾选执行", "sublabel": "停 或 保留" },
+    { "id": "svc", "lane": "target", "col": 2, "type": "external", "label": "被管服务", "sublabel": "停 / 继续跑" },
+    { "id": "gone", "lane": "daemon", "col": 4, "type": "backend", "label": "应用退出", "sublabel": "进程结束" },
+    { "id": "done", "lane": "ui", "col": 5, "type": "frontend", "label": "状态符合选择", "sublabel": "无残留误解", "tag": "闭环判据" }
+  ],
+  "edges": [
+    { "from": "quit", "to": "ask", "label": "有服务在跑", "role": "main", "variant": "emphasis", "route": "straight" },
+    { "from": "ask", "to": "act", "label": "确认", "role": "main", "variant": "emphasis" },
+    { "from": "act", "to": "svc", "label": "停或保留", "role": "main" },
+    { "from": "act", "to": "gone", "label": "执行完", "role": "main", "route": "straight" },
+    { "from": "gone", "to": "done", "label": "退出", "role": "return", "variant": "security" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "闭环判据", "items": ["没有服务在跑时不弹窗，直接退出", "勾选停止时，端口确实已释放", "不勾选时，服务确实脱离应用继续运行"] },
+    { "dot": "cyan", "title": "退出与「关窗」是两件事", "items": ["关窗 = 隐藏到托盘，服务继续跑", "退出 = 结束应用，才需要问服务怎么办", "托盘菜单也要能退出，不能只能从界面退"] },
+    { "dot": "amber", "title": "这条闭环的界面承载", "items": ["确认模态：服务清单 + 「同时停止」勾选（默认勾选）", "托盘菜单：打开主界面 / 退出", "无服务时的静默退出路径"] }
+  ]
+}

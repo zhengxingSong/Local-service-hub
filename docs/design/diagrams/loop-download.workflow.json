@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "闭环 L5 · 下载模型：从搜索选型到进入模型列表",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "pick", "label": "选型：别让人猜量化", "focus": ["entry", "resolve", "pick"], "note": "给出量化偏好顺序与文件大小，让人只做一次「是/不是」的确认。" },
+      { "id": "fetch", "label": "拉取：可中断可取消", "focus": ["fetch"], "note": "断点续传 + 进度 + 取消。旧版这里是同步 curl，整个应用会假死。" },
+      { "id": "verify", "label": "校验：不合格不许进列表", "focus": ["verify", "done"], "note": "大小或 SHA256 不符的文件不能进入可启动列表——这是唯一能防住静默截断的地方。" }
+    ]
+  },
+  "lanes": [
+    { "id": "ui", "label": "应用界面" },
+    { "id": "daemon", "label": "主进程" },
+    { "id": "remote", "label": "远端与磁盘" }
+  ],
+  "phases": [
+    { "id": "pick", "label": "选型", "fromCol": 0, "toCol": 1 },
+    { "id": "fetch", "label": "拉取", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "verify", "label": "校验与闭环", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["entry", "resolve", "pick", "fetch", "verify"],
+  "nodes": [
+    { "id": "entry", "lane": "ui", "col": 0, "type": "frontend", "label": "下载入口", "sublabel": "名称 / 直链" },
+    { "id": "resolve", "lane": "daemon", "col": 0, "type": "backend", "label": "搜索选型", "sublabel": "量化偏好" },
+    { "id": "pick", "lane": "ui", "col": 2, "type": "frontend", "label": "确认文件", "sublabel": "大小 + 摘要" },
+    { "id": "fetch", "lane": "remote", "col": 2, "type": "external", "label": "拉取", "sublabel": "断点续传 · 可取消" },
+    { "id": "verify", "lane": "daemon", "col": 4, "type": "backend", "label": "校验", "sublabel": "大小 + SHA256" },
+    { "id": "done", "lane": "ui", "col": 5, "type": "frontend", "label": "进入模型列表", "sublabel": "可体验 / 可建服务", "tag": "闭环判据" }
+  ],
+  "edges": [
+    { "from": "entry", "to": "resolve", "label": "输入", "role": "main", "variant": "emphasis" },
+    { "from": "resolve", "to": "pick", "label": "候选 + 量化", "role": "main", "variant": "emphasis" },
+    { "from": "pick", "to": "fetch", "label": "开始下载", "role": "main" },
+    { "from": "fetch", "to": "verify", "label": "完成", "role": "async", "variant": "dashed" },
+    { "from": "verify", "to": "done", "label": "校验通过", "role": "return", "variant": "security", "labelDy": 18 }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "闭环判据", "items": ["文件落在模型目录并出现在模型列表", "SHA256 与远端一致（有摘要时强制校验）", "同名且校验通过的文件不被覆盖"] },
+    { "dot": "cyan", "title": "失败分支要说清后果", "items": ["大小不符：保留 .part，可续传重试", "SHA256 不符：删除损坏分片，不给重试留隐患", "取消：立即停子进程，不留半截文件在列表里"] },
+    { "dot": "amber", "title": "这条闭环的界面承载", "items": ["下载模态：名称 / 直链 / 可选 SHA256", "进度区：已下载 / 总量 / 百分比 + 取消", "完成后：直接提供「创建服务」或「一键体验」"] }
+  ]
+}

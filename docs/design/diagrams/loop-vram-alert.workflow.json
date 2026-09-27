@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "闭环 L11 · 资源告警：从超阈到解除",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "notice", "label": "看见：告警要在第一屏", "focus": ["sample", "alert"], "note": "显存超阈不该藏在 GPU 卡里；顶栏摘要就该变色并给出数字。" },
+      { "id": "decide", "label": "决策：谁最该被停", "focus": ["rank", "pick"], "note": "按实测占用排序，让用户一眼看出停哪个最划算。" },
+      { "id": "close", "label": "闭环：回落才解除", "focus": ["stop", "clear"], "note": "判据是显存真的回落，而不是发出了停止命令。" }
+    ]
+  },
+  "lanes": [
+    { "id": "ui", "label": "应用界面" },
+    { "id": "daemon", "label": "主进程" },
+    { "id": "target", "label": "被管服务" }
+  ],
+  "phases": [
+    { "id": "notice", "label": "告警", "fromCol": 0, "toCol": 1 },
+    { "id": "decide", "label": "定位与决策", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "close", "label": "释放与闭环", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["alert", "rank", "pick", "stop"],
+  "nodes": [
+    { "id": "sample", "lane": "daemon", "col": 0, "type": "backend", "label": "显存采样", "sublabel": "5s 缓存" },
+    { "id": "alert", "lane": "ui", "col": 0, "type": "frontend", "label": "顶栏转警示", "sublabel": "超阈值" },
+    { "id": "rank", "lane": "ui", "col": 2, "type": "frontend", "label": "按占用排序", "sublabel": "实测优先" },
+    { "id": "pick", "lane": "ui", "col": 4, "type": "frontend", "label": "决定停谁", "sublabel": "看服务与显存" },
+    { "id": "stop", "lane": "daemon", "col": 4, "type": "backend", "label": "停止服务", "sublabel": "等显存释放" },
+    { "id": "clear", "lane": "ui", "col": 5, "type": "frontend", "label": "告警解除", "sublabel": "显存回落", "tag": "闭环判据" }
+  ],
+  "edges": [
+    { "from": "sample", "to": "alert", "label": "超阈值", "role": "async", "variant": "dashed" },
+    { "from": "alert", "to": "rank", "label": "点开", "role": "main", "variant": "emphasis", "route": "straight" },
+    { "from": "rank", "to": "pick", "label": "选一个", "role": "main", "variant": "emphasis", "route": "straight" },
+    { "from": "pick", "to": "stop", "label": "停止", "role": "main" },
+    { "from": "stop", "to": "clear", "label": "回落", "role": "return", "variant": "security" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "闭环判据", "items": ["显存低于阈值，顶栏警示色解除", "被停服务的状态确实变为已停止", "排序里不再有该服务占大头"] },
+    { "dot": "cyan", "title": "告警要给出可执行的下一步", "items": ["只报「显存紧张」没有用，要给出谁占最多", "区分实测与估算：有实测优先用实测", "无 NVIDIA 驱动时要退避，不要每 2 秒拉起一次 nvidia-smi"] },
+    { "dot": "amber", "title": "这条闭环的界面承载", "items": ["顶栏摘要：显存百分比 + 超阈变色", "占用排序列表：服务名 / 显存 / 停止按钮", "Toast：已停止 + 预计释放"] }
+  ]
+}

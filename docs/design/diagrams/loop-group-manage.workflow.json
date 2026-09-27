@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "闭环 L12 · 组管理：定义到可一键启停",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "define", "label": "定义：成员与独占", "focus": ["manage", "edit"], "note": "一个组只回答两件事：有谁、是否独占运行。" },
+      { "id": "apply", "label": "生效：写盘并更新组条", "focus": ["save", "bar"], "note": "保存后组条要立刻反映新成员数与独占锁标记。" },
+      { "id": "close", "label": "闭环：能被一键使用", "focus": ["done"], "note": "判据是这个组真的能按新定义一键启停，而不只是名字改了。" }
+    ]
+  },
+  "lanes": [
+    { "id": "ui", "label": "应用界面" },
+    { "id": "daemon", "label": "主进程" }
+  ],
+  "phases": [
+    { "id": "define", "label": "定义", "fromCol": 0, "toCol": 1 },
+    { "id": "apply", "label": "保存与生效", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "close", "label": "闭环", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["manage", "edit", "save", "bar", "done"],
+  "nodes": [
+    { "id": "manage", "lane": "ui", "col": 0, "type": "frontend", "label": "组管理" },
+    { "id": "edit", "lane": "ui", "col": 2, "type": "frontend", "label": "编辑组定义", "sublabel": "成员 + 独占标记" },
+    { "id": "save", "lane": "daemon", "col": 2, "type": "backend", "label": "写入预设", "sublabel": "services.json" },
+    { "id": "bar", "lane": "ui", "col": 4, "type": "frontend", "label": "组条更新", "sublabel": "成员数 · 锁标记" },
+    { "id": "done", "lane": "ui", "col": 5, "type": "frontend", "label": "可一键启停", "sublabel": "按新定义", "tag": "闭环判据" }
+  ],
+  "edges": [
+    { "from": "manage", "to": "edit", "label": "选一个组", "role": "main", "variant": "emphasis", "route": "straight" },
+    { "from": "edit", "to": "save", "label": "保存", "role": "main", "variant": "emphasis" },
+    { "from": "save", "to": "bar", "label": "生效", "role": "main" },
+    { "from": "bar", "to": "done", "role": "return" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "闭环判据", "items": ["组条上成员数与独占标记与实际一致", "按新定义一键启停能正确执行", "组内服务被删后不会留下悬空成员"] },
+    { "dot": "cyan", "title": "组只回答两个问题", "items": ["成员有谁（顺序与依赖留到后续版本）", "是否独占运行（决定启动时要不要先停别的组）", "组名只是标签，不作为服务 id 使用"] },
+    { "dot": "amber", "title": "这条闭环的界面承载", "items": ["组条：每组一个胶囊 + 管理入口", "组管理模态：成员多选 + 独占开关", "删除组时确认：不影响服务本身，只解散组合"] }
+  ]
+}

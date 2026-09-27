@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "闭环 L9 · 外部改配置：检测到对齐",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "detect", "label": "检测：不能装作没发生", "focus": ["edit", "notice"], "note": "外部改了 services.json，应用必须主动提示，而不是继续用旧参数跑。" },
+      { "id": "apply", "label": "应用：只动该动的", "focus": ["diff", "apply"], "note": "只重启「参数确实变化且正在运行」的服务；没变的不许无故重启。" },
+      { "id": "ignore", "label": "忽略：也是一条合法出口", "focus": ["notice", "ignore"], "note": "忽略后提示消失，下次再变更仍要提示——不能把一次忽略当成永久静音。" }
+    ]
+  },
+  "lanes": [
+    { "id": "fs", "label": "磁盘" },
+    { "id": "ui", "label": "应用界面" },
+    { "id": "daemon", "label": "主进程" }
+  ],
+  "phases": [
+    { "id": "detect", "label": "检测", "fromCol": 0, "toCol": 1 },
+    { "id": "diff", "label": "比对", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "apply", "label": "应用与闭环", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["edit", "notice", "diff", "apply"],
+  "nodes": [
+    { "id": "edit", "lane": "fs", "col": 0, "type": "external", "label": "外部改配置", "sublabel": "编辑器 / 脚本" },
+    { "id": "notice", "lane": "ui", "col": 0, "type": "frontend", "label": "提示条", "sublabel": "应用 / 忽略" },
+    { "id": "diff", "lane": "daemon", "col": 0, "type": "backend", "label": "比对差异", "sublabel": "只列变化项" },
+    { "id": "apply", "lane": "daemon", "col": 2, "type": "backend", "label": "只重启受影响", "sublabel": "参数变化且运行中" },
+    { "id": "ignore", "lane": "ui", "col": 2, "type": "frontend", "label": "忽略", "sublabel": "下次再提示" },
+    { "id": "done", "lane": "ui", "col": 4, "type": "frontend", "label": "提示消失", "sublabel": "运行中已对齐", "tag": "闭环判据" }
+  ],
+  "edges": [
+    { "from": "edit", "to": "notice", "label": "检测到变更", "role": "main", "variant": "emphasis" },
+    { "from": "notice", "to": "diff", "label": "点应用", "role": "main", "variant": "emphasis" },
+    { "from": "diff", "to": "apply", "label": "按差异执行", "role": "main", "route": "straight" },
+    { "from": "apply", "to": "done", "label": "对齐", "role": "return", "variant": "security" },
+    { "from": "notice", "to": "ignore", "label": "忽略", "role": "branch", "route": "straight" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "闭环判据", "items": ["提示条消失", "参数变化且运行中的服务已按新配置运行", "未变化与未运行的服务没有被无故重启"] },
+    { "dot": "cyan", "title": "自身写入不能被当成外部修改", "items": ["应用自己保存配置时必须排除掉这次变更", "抑制要用时间窗，不能用一次性标志位（否则会永久吞掉后续变更）", "外部写入紧跟自身保存时，宁可多提示一次"] },
+    { "dot": "amber", "title": "这条闭环的界面承载", "items": ["页内提示条（非浮层，不打断操作）", "应用后 Toast：已重启 N 个服务", "差异清单：列出将受影响的服务的名字"] }
+  ]
+}

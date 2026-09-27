@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "闭环 L8 · 设置维护：改项到行为改变",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "save", "label": "保存：一次动作两处生效", "focus": ["settings", "persist", "live"], "note": "保存要做两件事：写配置文件，以及立即更新运行中的服务管理器参数。" },
+      { "id": "persist", "label": "持久：重启后仍成立", "focus": ["reread", "done"], "note": "只有「重启后仍然生效」才算真的保存成功；登录自启还要写进注册表。" }
+    ]
+  },
+  "lanes": [
+    { "id": "ui", "label": "应用界面" },
+    { "id": "daemon", "label": "主进程" },
+    { "id": "os", "label": "系统与磁盘" }
+  ],
+  "phases": [
+    { "id": "edit", "label": "修改", "fromCol": 0, "toCol": 1 },
+    { "id": "apply", "label": "生效", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "prove", "label": "持久与闭环", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["settings", "persist", "live", "done"],
+  "nodes": [
+    { "id": "settings", "lane": "ui", "col": 0, "type": "frontend", "label": "设置页", "sublabel": "llama / 运行 / 数据" },
+    { "id": "persist", "lane": "daemon", "col": 0, "type": "backend", "label": "写入配置", "sublabel": "配置 + 注册表" },
+    { "id": "live", "lane": "daemon", "col": 2, "type": "backend", "label": "运行时生效", "sublabel": "路径 · 上限 · 阈值" },
+    { "id": "reread", "lane": "os", "col": 4, "type": "external", "label": "重启后仍生效", "sublabel": "读 services.json" },
+    { "id": "done", "lane": "ui", "col": 4, "type": "frontend", "label": "设置已生效", "sublabel": "行为已改变", "tag": "闭环判据" }
+  ],
+  "edges": [
+    { "from": "settings", "to": "persist", "label": "保存", "role": "main", "variant": "emphasis" },
+    { "from": "persist", "to": "live", "label": "立即", "role": "main", "route": "straight" },
+    { "from": "live", "to": "done", "label": "反馈", "role": "main", "variant": "emphasis" },
+    { "from": "live", "to": "reread", "label": "写入磁盘", "role": "async", "variant": "dashed" },
+    { "from": "reread", "to": "done", "label": "重启后仍生效", "role": "return", "variant": "security" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "闭环判据", "items": ["配置项写入 services.json 并立即影响运行行为", "重启应用后设置仍然成立", "登录自启的改动同时落到注册表"] },
+    { "dot": "cyan", "title": "设置项分三类，影响面不同", "items": ["能力开关：llama 路径 / 扫描根 / 模型目录（决定模型面板是否出现）", "运行参数：崩溃重启上限、显存告警阈值（立即影响判定）", "环境项：登录自启（写注册表，与配置文件不同步也不算错）"] },
+    { "dot": "amber", "title": "这条闭环的界面承载", "items": ["设置页：分三组，每组说明影响面", "Toast：已保存 / 哪一项无效", "数据区：配置文件与日志目录位置，可直接打开"] }
+  ]
+}

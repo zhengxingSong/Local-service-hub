@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "闭环 L4 · 模型体验：从一键试跑到转正",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "try", "label": "试：不污染配置", "focus": ["library", "trial", "use"], "note": "一键体验的临时服务不写进配置、自动挑空闲端口，试用不满意不会留下垃圾。" },
+      { "id": "judge", "label": "判：满意再留", "focus": ["trial", "judge"], "note": "试用与转正是两个动作，中间那一次「满意吗」必须由用户来答。" },
+      { "id": "promote", "label": "转：原样保留参数", "focus": ["promote", "done"], "note": "转正必须沿用体验时的启动参数，否则「试好了」和「留下来」是两套东西。" }
+    ]
+  },
+  "lanes": [
+    { "id": "ui", "label": "应用界面" },
+    { "id": "daemon", "label": "主进程" },
+    { "id": "llama", "label": "临时服务" }
+  ],
+  "phases": [
+    { "id": "try", "label": "试跑", "fromCol": 0, "toCol": 1 },
+    { "id": "judge", "label": "评估", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "promote", "label": "转正与闭环", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["library", "trial", "judge", "promote"],
+  "nodes": [
+    { "id": "library", "lane": "ui", "col": 0, "type": "frontend", "label": "模型库", "sublabel": "未纳管模型" },
+    { "id": "trial", "lane": "daemon", "col": 0, "type": "backend", "label": "一键体验", "sublabel": "临时端口 · 不写配置" },
+    { "id": "use", "lane": "llama", "col": 0, "type": "external", "label": "试用中", "sublabel": "临时服务行" },
+    { "id": "judge", "lane": "ui", "col": 2, "type": "frontend", "label": "满意吗", "sublabel": "转正 / 放弃" },
+    { "id": "promote", "lane": "daemon", "col": 2, "type": "backend", "label": "转正", "sublabel": "沿用启动参数" },
+    { "id": "done", "lane": "ui", "col": 4, "type": "frontend", "label": "持久服务", "sublabel": "进入服务列表", "tag": "闭环判据" }
+  ],
+  "edges": [
+    { "from": "library", "to": "trial", "label": "点体验", "role": "main", "variant": "emphasis" },
+    { "from": "trial", "to": "use", "label": "拉起", "role": "main" },
+    { "from": "trial", "to": "judge", "label": "试用", "role": "main", "variant": "emphasis" },
+    { "from": "judge", "to": "promote", "label": "满意", "role": "main" },
+    { "from": "promote", "to": "done", "label": "写入配置", "role": "return", "variant": "security", "labelDy": 18 }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "闭环判据", "items": ["临时服务行消失，被一条持久服务替代", "持久服务的启动参数与体验时完全一致", "该服务不再计入「未纳管模型」"] },
+    { "dot": "cyan", "title": "体验服务必须与持久服务区分开", "items": ["带「体验」标记，且不能设自启", "占用自动挑选的空闲端口，不写 services.json", "「放弃」= 停止并移除，不留残条目"] },
+    { "dot": "amber", "title": "这条闭环的界面承载", "items": ["模型库：未纳管模型 + 一键体验按钮", "体验行：转正 / 放弃两个动作", "转正提示：说明将沿用哪些参数"] }
+  ]
+}
