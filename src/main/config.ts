@@ -97,30 +97,46 @@ const EMPTY_SERVICE: ServiceConfig = {
   enabled: true,
 };
 
+/**
+ * 读取边界布尔归一化：接受布尔与常见的字符串/数字写法（true/1/yes/on），
+ * 无法识别时回退到默认值。配置文件可能被手工编辑。
+ */
+function toBoolean(value: unknown, fallback: boolean): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? value !== 0 : fallback;
+  if (typeof value === 'string') {
+    const text = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'on'].includes(text)) return true;
+    if (['false', '0', 'no', 'off', ''].includes(text)) return false;
+  }
+  return fallback;
+}
+
 /** 读取边界归一化：配置文件可能被手工编辑，字段类型不可信。 */
-function normalizeService(raw: unknown): ServiceConfig {
-  const svc = { ...EMPTY_SERVICE, ...(raw as Partial<ServiceConfig>) };
+function normalizeService(raw: unknown, fallback: ServiceConfig = EMPTY_SERVICE): ServiceConfig {
+  const svc = { ...fallback, ...(raw as Partial<ServiceConfig>) };
   return {
     ...svc,
     args: Array.isArray(svc.args) ? svc.args.map(String) : [],
     port: Number.isFinite(Number(svc.port)) ? Number(svc.port) : 0,
-    autostart: svc.autostart === true,
-    enabled: svc.enabled !== false,
+    autostart: toBoolean(svc.autostart, false),
+    enabled: toBoolean(svc.enabled, true),
     composeProfiles: Array.isArray(svc.composeProfiles) ? svc.composeProfiles.map(String) : [],
   };
 }
 
 /**
  * 合并磁盘配置与内置默认值。
- * 服务与预设组的存在性以磁盘为准（删除内置项后不再复活），仅为保留项补齐缺失字段。
- * 整段缺失（旧版本配置文件或手工裁剪过的文件）才回退到内置默认值。
+ * 服务与预设组的存在性以磁盘为准（删除内置项后不再复活）；
+ * 保留项先按同 id 的内置默认值补齐，再按通用兜底值补齐并归一化字段类型。
+ * 整段缺失（旧版本配置文件或手工裁剪过的文件）才回退到内置默认集合。
  */
 export function mergeLoadedConfig(raw: unknown, base: AppConfig): AppConfig {
   const source = (raw ?? {}) as Partial<AppConfig>;
   const diskServices = source.services && typeof source.services === 'object' ? source.services : base.services;
   const services: Record<string, ServiceConfig> = {};
   for (const [id, svc] of Object.entries(diskServices)) {
-    services[id] = normalizeService(svc);
+    services[id] = normalizeService(svc, base.services[id] ?? EMPTY_SERVICE);
   }
   return {
     ...base,

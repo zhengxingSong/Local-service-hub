@@ -14,8 +14,10 @@ win:
       arch:
         - x64
   icon: resources/icon.ico
-  # 跳过签名与可执行文件图标/版本编辑，避免 winCodeSign 解压符号链接的权限问题
-  signAndEditExecutable: false
+  # 写入 exe 图标与版本信息（产品名/公司/版权/版本），使属性页与任务管理器不再显示 Electron
+  signAndEditExecutable: true
+  # 未配置证书时不签名（仅在提供 CSC_LINK 时签名）
+  verifyUpdateCodeSignature: false
 
 nsis:
   oneClick: false

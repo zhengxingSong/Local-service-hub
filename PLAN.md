@@ -1,6 +1,9 @@
-# LLaMA 模型管理器 — 开发计划
+# LLaMA 模型管理器 — 开发计划（历史记录）
 
-> 本文档为历史开发计划与实现记录。升级方向与 0.3.0 目标见 [ROADMAP.md](ROADMAP.md)。
+> **历史文档**：本文件记录 0.1.0–0.3.1 时期以「LLaMA 模型管理器」为定位的开发计划与实现记录，
+> 其中的目录结构、默认服务与配置路径可能已过时，请勿据此行事。
+> 当前定位与目标见 [ROADMAP.md](ROADMAP.md)，使用方式见 [README.md](README.md)。
+> 相关的用户数据已迁移到 `%APPDATA%\服务中枢`。
 
 独立 Electron 桌面应用（非 DSH 插件），管理并启动 llama.cpp 模型服务。
 工程目录：`D:\LLM Model\llama.cpp\desktop\`
