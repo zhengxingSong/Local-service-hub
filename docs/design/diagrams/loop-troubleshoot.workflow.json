@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "闭环 L6 · 排障与日志：从失败行到 lastError 清空",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "open", "label": "进入：不丢列表", "focus": ["fail", "drawer"], "note": "从失败行进入抽屉，服务列表仍然可见——排障时最怕丢掉「其它服务还活着吗」这个上下文。" },
+      { "id": "triage", "label": "归因：四类常见原因", "focus": ["diagnose", "fix"], "note": "端口被占 / 路径不存在 / 显存不足 / 参数错误，每一类的修正动作不同，界面要给出对应入口。" },
+      { "id": "close", "label": "闭环：错误态必须清空", "focus": ["restart", "ok"], "note": "重启不等于修好；判据是 lastError 清空且状态回到运行中。" }
+    ]
+  },
+  "lanes": [
+    { "id": "ui", "label": "应用界面" },
+    { "id": "daemon", "label": "主进程" },
+    { "id": "target", "label": "被管服务" }
+  ],
+  "phases": [
+    { "id": "open", "label": "进入", "fromCol": 0, "toCol": 1 },
+    { "id": "triage", "label": "归因与修正", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "close", "label": "重启与闭环", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["fail", "drawer", "diagnose", "fix", "restart"],
+  "nodes": [
+    { "id": "fail", "lane": "ui", "col": 0, "type": "frontend", "label": "失败服务行", "sublabel": "行内错误摘要" },
+    { "id": "drawer", "lane": "ui", "col": 2, "type": "frontend", "label": "服务抽屉", "sublabel": "错误 + 日志尾部" },
+    { "id": "diagnose", "lane": "daemon", "col": 2, "type": "backend", "label": "归因", "sublabel": "端口/路径/显存/参数" },
+    { "id": "fix", "lane": "daemon", "col": 4, "type": "backend", "label": "修正动作", "sublabel": "三种修正动作" },
+    { "id": "restart", "lane": "target", "col": 5, "type": "external", "label": "服务重新拉起" },
+    { "id": "ok", "lane": "ui", "col": 5, "type": "frontend", "label": "lastError 清空", "sublabel": "状态运行中", "tag": "闭环判据" }
+  ],
+  "edges": [
+    { "from": "fail", "to": "drawer", "label": "点开该行", "role": "main", "variant": "emphasis", "route": "straight" },
+    { "from": "drawer", "to": "diagnose", "label": "读错误与日志", "role": "main" },
+    { "from": "diagnose", "to": "fix", "label": "按类型决定改什么", "role": "main", "route": "straight" },
+    { "from": "fix", "to": "restart", "label": "重启", "role": "main" },
+    { "from": "restart", "to": "ok", "label": "就绪", "role": "return", "variant": "security" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "闭环判据", "items": ["lastError 清空", "状态回到「运行中」而不是「启动中」", "重启次数不再继续累加"] },
+    { "dot": "cyan", "title": "四类原因要各自给出修正入口", "items": ["端口被占：列出占用者，提供「停掉它」而不是只报错", "路径不存在：直接跳到编辑页并聚焦该字段", "显存不足：给出降 ctx / 降 ngl 的建议值", "参数错误：保留原始 args 可编辑"] },
+    { "dot": "amber", "title": "这条闭环的界面承载", "items": ["行内错误摘要：不点开就能看出是哪一类错", "抽屉：错误详情 + 日志尾部 + 修正入口", "日志导出：复制 / 打开目录（同一抽屉内完成）"] }
+  ]
+}

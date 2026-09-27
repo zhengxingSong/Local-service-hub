@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "闭环 L2 · 组切换与独占互斥",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "decide", "label": "决策：先说清代价", "focus": ["gclick", "conflict", "confirm"], "note": "点组启动后，先告诉用户会停掉谁、能释放多少显存，再让他决定。" },
+      { "id": "switch", "label": "切换：旧的要停净", "focus": ["stopold", "startnew"], "note": "旧组必须等端口真正释放才开始起新组，否则新实例会被误判为「已有同实例」而接管旧进程。" },
+      { "id": "close", "label": "闭环：组级判据", "focus": ["ready", "gstate"], "note": "闭环判据不是「发出了启动命令」，而是组成员逐个就绪后的 2/2。" }
+    ]
+  },
+  "lanes": [
+    { "id": "ui", "label": "应用界面" },
+    { "id": "daemon", "label": "主进程" },
+    { "id": "target", "label": "被管服务" }
+  ],
+  "phases": [
+    { "id": "decide", "label": "决策", "fromCol": 0, "toCol": 1 },
+    { "id": "switch", "label": "切换", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "close", "label": "就绪与闭环", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["gclick", "conflict", "confirm", "stopold", "startnew", "ready"],
+  "nodes": [
+    { "id": "gclick", "lane": "ui", "col": 0, "type": "frontend", "label": "点击组启动" },
+    { "id": "conflict", "lane": "daemon", "col": 0, "type": "backend", "label": "独占冲突检测", "sublabel": "读组标记" },
+    { "id": "confirm", "lane": "ui", "col": 2, "type": "frontend", "label": "确认模态", "sublabel": "停谁 · 释放多少" },
+    { "id": "stopold", "lane": "daemon", "col": 2, "type": "backend", "label": "停旧组", "sublabel": "等端口释放" },
+    { "id": "startnew", "lane": "daemon", "col": 4, "type": "backend", "label": "启新组" },
+    { "id": "ready", "lane": "target", "col": 5, "type": "external", "label": "成员逐个就绪", "sublabel": "按各自判定" },
+    { "id": "gstate", "lane": "ui", "col": 5, "type": "frontend", "label": "组运行中 2/2", "sublabel": "可一键停", "tag": "闭环判据" }
+  ],
+  "edges": [
+    { "from": "gclick", "to": "conflict", "label": "是独占组", "role": "main", "variant": "emphasis" },
+    { "from": "conflict", "to": "confirm", "label": "列出将停服务", "role": "main", "variant": "emphasis" },
+    { "from": "confirm", "to": "stopold", "label": "确认", "role": "main" },
+    { "from": "stopold", "to": "startnew", "label": "端口已释放", "role": "main", "route": "straight" },
+    { "from": "startnew", "to": "ready", "label": "拉起成员", "role": "async", "variant": "dashed" },
+    { "from": "ready", "to": "gstate", "label": "全部就绪", "role": "return", "variant": "security" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "闭环判据", "items": ["组状态从「切换中」变为「运行中 N/N」", "旧组成员全部已停止且端口已释放", "确认模态里承诺释放的显存确实回落"] },
+    { "dot": "cyan", "title": "决策必须先于动作", "items": ["独占不是静默抢占，而是先给出将停清单", "预计释放显存要写数字，不写「一些」", "取消要能真的退回原状态，不能半途而废"] },
+    { "dot": "amber", "title": "这条闭环的界面承载", "items": ["组条：每组一个胶囊，显示成员就绪数与启停", "确认模态：唯一需要「拦住」用户的地方", "组管理：改名 / 增删成员 / 标记独占"] }
+  ]
+}

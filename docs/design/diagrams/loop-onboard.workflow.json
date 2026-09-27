@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "闭环 L3 · 新增服务：从选形态到确认就绪",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "fill", "label": "填写：只问必答", "focus": ["entry", "form"], "note": "三类形态只需要各自的必填项；就绪判定有默认值，不强迫每个人理解四种判定方式的差别。" },
+      { "id": "precheck", "label": "预检：把冲突挡在启动之前", "focus": ["save", "check"], "note": "端口占用、路径不存在、显存不足都在保存时就报出来，而不是等启动失败再解释。" },
+      { "id": "close", "label": "闭环：就绪才算完成", "focus": ["spawn", "ready"], "note": "保存成功不是闭环，进程起来也不是；按该服务的就绪判定确认可用才是。" }
+    ]
+  },
+  "lanes": [
+    { "id": "ui", "label": "应用界面" },
+    { "id": "daemon", "label": "主进程" },
+    { "id": "target", "label": "被管服务" }
+  ],
+  "phases": [
+    { "id": "fill", "label": "填写", "fromCol": 0, "toCol": 1 },
+    { "id": "save", "label": "保存与预检", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "spawn", "label": "拉起与闭环", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["entry", "form", "save", "check", "spawn"],
+  "nodes": [
+    { "id": "entry", "lane": "ui", "col": 0, "type": "frontend", "label": "新增服务", "sublabel": "选三类形态" },
+    { "id": "form", "lane": "ui", "col": 2, "type": "frontend", "label": "表单", "sublabel": "字段 + 就绪判定" },
+    { "id": "save", "lane": "ui", "col": 4, "type": "frontend", "label": "保存入列", "sublabel": "已停止状态" },
+    { "id": "check", "lane": "daemon", "col": 4, "type": "backend", "label": "校验 + 预检", "sublabel": "端口/路径/显存" },
+    { "id": "spawn", "lane": "daemon", "col": 5, "type": "backend", "label": "拉起进程" },
+    { "id": "ready", "lane": "target", "col": 5, "type": "external", "label": "就绪", "sublabel": "按判定方式确认", "tag": "闭环判据" }
+  ],
+  "edges": [
+    { "from": "entry", "to": "form", "label": "填必填项", "role": "main", "variant": "emphasis", "route": "straight" },
+    { "from": "form", "to": "save", "label": "保存", "role": "main", "variant": "emphasis", "route": "straight" },
+    { "from": "save", "to": "check", "label": "写入并预检", "role": "main" },
+    { "from": "check", "to": "spawn", "role": "main" },
+    { "from": "spawn", "to": "ready", "label": "拉起", "role": "return", "variant": "security" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "闭环判据", "items": ["新服务出现在列表且状态为运行中", "就绪判定通过（不是「启动中」卡住）", "端口/路径/显存在保存时已确认无冲突"] },
+    { "dot": "cyan", "title": "三类形态只需要各自的必填项", "items": ["llama：模型 + 端口（参数有默认值）", "命令：可执行文件（工作目录默认取命令所在目录）", "容器：Compose 目录（文件与 profile 可选）"] },
+    { "dot": "amber", "title": "这条闭环的界面承载", "items": ["二阶页：编辑表单（字段多，模态里会滚很久）", "Toast：保存成功 / 校验失败的具体原因", "预检结果：直接指向要改的那个字段"] }
+  ]
+}

@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "visual-check",
+  "status": "fail",
+  "visualReview": "pending",
+  "artifact": {
+    "path": "D:\\LLM Model\\llama.cpp\\desktop\\docs\\design\\diagrams\\loop-inspect.workflow.html",
+    "sha256": "ad64620ac4048e24fdb748720c06a960b08d0e064854ce165884a3c46ad1f491",
+    "bytes": 634889
+  },
+  "state": {
+    "detail": "read",
+    "motion": "still"
+  },
+  "chrome": {
+    "status": "available",
+    "executable": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+  },
+  "containment": {
+    "status": "fail",
+    "viewports": [
+      {
+        "width": 1440,
+        "height": 900,
+        "theme": "light",
+        "innerWidth": 1440,
+        "innerHeight": 900,
+        "scrollWidth": 1440,
+        "scrollHeight": 1358,
+        "overflowX": false,
+        "overflowY": true,
+        "ok": false,
+        "resolvedTheme": "light"
+      },
+      {
+        "width": 1600,
+        "height": 1000,
+        "theme": "light",
+        "innerWidth": 1600,
+        "innerHeight": 1000,
+        "scrollWidth": 1600,
+        "scrollHeight": 1411,
+        "overflowX": false,
+        "overflowY": true,
+        "ok": false,
+        "resolvedTheme": "light"
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "theme": "light",
+        "innerWidth": 1920,
+        "innerHeight": 1080,
+        "scrollWidth": 1920,
+        "scrollHeight": 1411,
+        "overflowX": false,
+        "overflowY": true,
+        "ok": false,
+        "resolvedTheme": "light"
+      },
+      {
+        "width": 2048,
+        "height": 1320,
+        "theme": "light",
+        "innerWidth": 2048,
+        "innerHeight": 1320,
+        "scrollWidth": 2048,
+        "scrollHeight": 1448,
+        "overflowX": false,
+        "overflowY": true,
+        "ok": false,
+        "resolvedTheme": "light"
+      }
+    ]
+  },
+  "captures": {
+    "status": "pass",
+    "screenshots": [
+      {
+        "width": 1440,
+        "height": 900,
+        "theme": "light",
+        "innerWidth": 1440,
+        "innerHeight": 900,
+        "scrollWidth": 1440,
+        "scrollHeight": 1358,
+        "overflowX": false,
+        "overflowY": true,
+        "ok": false,
+        "resolvedTheme": "light",
+        "file": "loop-inspect.workflow.visual-check.1440x900.light.png"
+      },
+      {
+        "width": 1440,
+        "height": 900,
+        "theme": "dark",
+        "innerWidth": 1440,
+        "innerHeight": 900,
+        "scrollWidth": 1440,
+        "scrollHeight": 1358,
+        "overflowX": false,
+        "overflowY": true,
+        "ok": false,
+        "resolvedTheme": "dark",
+        "file": "loop-inspect.workflow.visual-check.1440x900.dark.png"
+      },
+      {
+        "width": 2048,
+        "height": 1320,
+        "theme": "light",
+        "innerWidth": 2048,
+        "innerHeight": 1320,
+        "scrollWidth": 2048,
+        "scrollHeight": 1448,
+        "overflowX": false,
+        "overflowY": true,
+        "ok": false,
+        "resolvedTheme": "light",
+        "file": "loop-inspect.workflow.visual-check.2048x1320.light.png"
+      },
+      {
+        "width": 2048,
+        "height": 1320,
+        "theme": "dark",
+        "innerWidth": 2048,
+        "innerHeight": 1320,
+        "scrollWidth": 2048,
+        "scrollHeight": 1448,
+        "overflowX": false,
+        "overflowY": true,
+        "ok": false,
+        "resolvedTheme": "dark",
+        "file": "loop-inspect.workflow.visual-check.2048x1320.dark.png"
+      }
+    ],
+    "contactSheet": "loop-inspect.workflow.visual-check.html"
+  },
+  "sidecars": {
+    "receipt": "loop-inspect.workflow.visual-check.json",
+    "contactSheet": "loop-inspect.workflow.visual-check.html"
+  }
+}

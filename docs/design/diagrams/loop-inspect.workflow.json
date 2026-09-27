@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "闭环 L1 · 巡检：从唤起窗口到摘要归零",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "sense", "label": "感知：零点击", "focus": ["wake", "summary", "probe"], "note": "唤起窗口后顶栏摘要就要回答「都活着吗」——这是最高频的一次交互。" },
+      { "id": "diagnose", "label": "诊断：不丢列表上下文", "focus": ["failrow", "drawer"], "note": "从失败行进入抽屉看完整错误与日志尾部，服务列表始终可见。" },
+      { "id": "close", "label": "闭环：摘要归零", "focus": ["action", "summary"], "note": "处置后靠摘要回到全绿证明闭环完成，而不是让人自己记住。" }
+    ]
+  },
+  "lanes": [
+    { "id": "ui", "label": "应用界面" },
+    { "id": "daemon", "label": "主进程" },
+    { "id": "target", "label": "被管服务" }
+  ],
+  "phases": [
+    { "id": "sense", "label": "感知", "fromCol": 0, "toCol": 1 },
+    { "id": "locate", "label": "定位与诊断", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "close", "label": "处置与闭环", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["wake", "summary", "failrow", "drawer", "action"],
+  "nodes": [
+    { "id": "wake", "lane": "ui", "col": 0, "type": "frontend", "label": "唤起窗口", "sublabel": "托盘 / 二次启动" },
+    { "id": "summary", "lane": "ui", "col": 2, "type": "frontend", "label": "顶栏摘要", "sublabel": "失败 · 显存" },
+    { "id": "failrow", "lane": "ui", "col": 4, "type": "frontend", "label": "失败服务行", "sublabel": "行内错误摘要" },
+    { "id": "probe", "lane": "daemon", "col": 2, "type": "backend", "label": "就绪判定", "sublabel": "TTL 内复用" },
+    { "id": "drawer", "lane": "daemon", "col": 4, "type": "frontend", "label": "服务抽屉", "sublabel": "错误 + 日志尾部" },
+    { "id": "action", "lane": "daemon", "col": 5, "type": "backend", "label": "停止并重启", "sublabel": "等进程退出" },
+    { "id": "proc", "lane": "target", "col": 2, "type": "external", "label": "被管服务", "sublabel": "三类形态" }
+  ],
+  "edges": [
+    { "from": "wake", "to": "summary", "label": "读全局状态", "role": "main", "variant": "emphasis", "route": "straight" },
+    { "from": "summary", "to": "failrow", "label": "失败数 > 0", "role": "main", "variant": "emphasis", "route": "straight" },
+    { "from": "failrow", "to": "drawer", "label": "点击该行", "role": "main" },
+    { "from": "drawer", "to": "action", "role": "main" },
+    { "from": "action", "to": "summary", "label": "摘要归零 = 闭环", "role": "return", "variant": "security", "route": "up-channel", "fromSide": "top", "toSide": "top" },
+    { "from": "proc", "to": "probe", "label": "探活", "role": "async", "variant": "dashed" },
+    { "from": "probe", "to": "summary", "label": "推送", "role": "async", "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "闭环判据（必须可见）", "items": ["顶栏摘要的失败数归零", "失败行不再显示错误摘要", "抽屉里的 lastError 已清空"] },
+    { "dot": "cyan", "title": "感知前移：把答案放到第一屏", "items": ["摘要区分运行 / 就绪中 / 失败，不要让人点进去猜", "失败行直接给错误摘要，而不是只变个颜色", "显存超阈值也要在摘要里可见，不必翻到 GPU 卡"] },
+    { "dot": "amber", "title": "这条闭环现在缺的界面能力", "items": ["顶栏全局摘要：当前完全没有", "行内错误摘要：现在只有卡片底部一行红字", "Toast 反馈：现在所有结果共用一条 4 秒 banner", "抽屉：现在日志是模态弹窗，会盖住服务列表"] }
+  ]
+}
