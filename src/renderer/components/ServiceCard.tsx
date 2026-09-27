@@ -1,7 +1,8 @@
-import { Play, Square, RotateCw, FileText, Pencil, Trash2, Sparkles, HardDrive } from 'lucide-react';
+import { Play, Square, RotateCw, FileText, Pencil, Trash2, Sparkles, HardDrive, X } from 'lucide-react';
 import { ServiceView } from '../types';
 
-const OV_ROLES = new Set(['vlm', 'embedding', 'intent']);
+const KIND_LABEL: Record<string, string> = { llama: 'llama', command: '命令', compose: '容器' };
+const HEALTH_LABEL: Record<string, string> = { none: '不检查', tcp: '端口', http: 'HTTP', 'openai-models': '模型列表' };
 
 export function basename(path: string): string {
   const parts = path.replace(/[\\/]+/g, '/').split('/');
@@ -17,6 +18,7 @@ export function formatSize(bytes: number): string {
 export function statusText(svc: ServiceView): string {
   if (svc.state === 'running') {
     if (svc.isCompose) return '容器运行中';
+    if (svc.healthCheckType === 'none') return '运行中';
     if (svc.healthy) return '运行中';
     return '就绪中…';
   }
@@ -30,7 +32,7 @@ export function statusText(svc: ServiceView): string {
 }
 
 export function dotClass(svc: ServiceView): string {
-  if (svc.state === 'running') return svc.isCompose || svc.healthy ? 'dot-running' : 'dot-loading';
+  if (svc.state === 'running') return svc.isCompose || svc.healthCheckType === 'none' || svc.healthy ? 'dot-running' : 'dot-loading';
   if (svc.state === 'starting') return 'dot-loading';
   if (svc.state === 'restarting') return 'dot-restarting';
   if (svc.state === 'failed') return 'dot-failed';
@@ -54,9 +56,10 @@ interface Props {
   onToggleAutostart: (id: string) => void;
   onOpenLog: (id: string) => void;
   onPromote?: (id: string) => void;
+  onDropTrial?: (id: string) => void;
 }
 
-export function ServiceCard({ svc, busy, onStart, onStop, onRestart, onEdit, onDelete, onToggleAutostart, onOpenLog, onPromote }: Props) {
+export function ServiceCard({ svc, busy, onStart, onStop, onRestart, onEdit, onDelete, onToggleAutostart, onOpenLog, onPromote, onDropTrial }: Props) {
   const isActive = svc.state === 'running' || svc.state === 'starting' || svc.state === 'restarting';
   const isTrial = svc.id.startsWith('trial-');
   return (
@@ -67,7 +70,10 @@ export function ServiceCard({ svc, busy, onStart, onStop, onRestart, onEdit, onD
           <span className="card-label" title={svc.label}>{svc.label}</span>
           {isTrial && <span className="trial-badge"><Sparkles size={12} /> 体验</span>}
         </div>
-        {svc.role && <span className={`role-badge${OV_ROLES.has(svc.role) ? '' : ' plain'}`}>{svc.role}</span>}
+        <div className="card-badges">
+          {svc.role && <span className="role-badge plain">{svc.role}</span>}
+          <span className="kind-badge">{KIND_LABEL[svc.kind] ?? svc.kind}</span>
+        </div>
       </div>
 
       <div className="card-body">
@@ -89,6 +95,7 @@ export function ServiceCard({ svc, busy, onStart, onStop, onRestart, onEdit, onD
           </>
         )}
         <div className="field"><span className="k">端口</span><span className="v">{svc.port > 0 ? svc.port : '—'}</span></div>
+        <div className="field"><span className="k">就绪判定</span><span className="v">{HEALTH_LABEL[svc.healthCheckType] ?? svc.healthCheckType}</span></div>
         {(svc.vramEstimateMB !== null || svc.vramActualMB !== null) && (
           <div className="field"><span className="k"><HardDrive size={12} /> 显存</span><span className="v">{vramText(svc)}</span></div>
         )}
@@ -104,7 +111,10 @@ export function ServiceCard({ svc, busy, onStart, onStop, onRestart, onEdit, onD
 
       <div className="card-actions">
         {isTrial && onPromote ? (
-          <button className="btn primary" disabled={busy} onClick={() => onPromote(svc.id)}>转正</button>
+          <>
+            <button className="btn primary" disabled={busy} onClick={() => onPromote(svc.id)}>转正</button>
+            {onDropTrial && <button className="btn ghost" disabled={busy} onClick={() => onDropTrial(svc.id)}><X size={13} /> 放弃</button>}
+          </>
         ) : isActive ? (
           <button className="btn" disabled={busy} onClick={() => onStop(svc.id)}><Square size={14} /> 停止</button>
         ) : (

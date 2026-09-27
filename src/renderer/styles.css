@@ -427,3 +427,24 @@ hr.sep { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
   color: #c7d2fe;
   margin-left: 4px;
 }
+
+/* ---------- 服务类型与就绪判定 ---------- */
+.card-badges { display: flex; align-items: center; gap: 6px; }
+.kind-badge {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+/* ---------- 模型库工具栏 ---------- */
+.model-lib-actions { display: flex; gap: 6px; }
+.model-lib-actions .btn { display: inline-flex; align-items: center; gap: 4px; }
+.model-more { margin-top: 10px; width: 100%; justify-content: center; }
+
+/* ---------- 下载对话框 ---------- */
+.tab-row { display: flex; gap: 6px; margin-bottom: 12px; }
+.progress-block { margin: 12px 0; }
+.progress-meta { margin-top: 6px; font-size: 12px; color: var(--text-tertiary); }

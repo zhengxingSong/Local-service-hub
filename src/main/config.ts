@@ -1,6 +1,21 @@
-import { app } from 'electron';
 import { existsSync, mkdirSync, readFileSync, watchFile, unwatchFile, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname } from 'node:path';
+
+/** 服务的启动形态。旧配置没有该字段，由 serviceKind() 按已有字段推断。 */
+export type ServiceKind = 'llama' | 'command' | 'compose';
+
+/**
+ * 就绪判定方式。
+ * - none：不做探活，视为已就绪
+ * - tcp：端口可连接即就绪
+ * - http：请求 path 并校验状态码/响应体（响应体支持 {{alias}}/{{model}}/{{port}} 占位）
+ * - openai-models：解析 OpenAI 兼容的 /v1/models 响应，校验指定 alias 已加载
+ */
+export type HealthCheck =
+  | { type: 'none' }
+  | { type: 'tcp' }
+  | { type: 'http'; path?: string; expectStatus?: number; expectBody?: string }
+  | { type: 'openai-models'; path?: string; expectAlias?: string };
 
 export interface ServiceConfig {
   label: string;
@@ -12,6 +27,10 @@ export interface ServiceConfig {
   args: string[];
   autostart: boolean;
   enabled: boolean;
+  /** 启动形态；缺省时按 command/composeDir 推断 */
+  kind?: ServiceKind;
+  /** 就绪判定；缺省时 llama 形态用 openai-models，其余用 tcp */
+  healthCheck?: HealthCheck;
   /** 通用命令模式：非空时直接执行该命令（无视 llama 模板），args 作为其参数 */
   command?: string;
   /** 通用命令模式：工作目录 */
@@ -29,8 +48,12 @@ export interface ServiceConfig {
 }
 
 export interface AppConfig {
+  /** llama-server 可执行文件路径；为空表示不使用 llama 能力 */
   llamaServerPath: string;
+  /** GGUF 扫描根目录；为空表示不扫描模型 */
   scanRoots: string[];
+  /** 模型下载目录；为空时沿用 scanRoots[0]/llama.cpp/models */
+  modelsRoot: string;
   maxRestarts: number;
   autostartOnLogin: boolean;
   vramWarnThreshold: number;
@@ -38,114 +61,86 @@ export interface AppConfig {
   presets: Record<string, string[]>;
   /** 独占运行预设组名列表：启动其中一组时提示停止其他运行中的组 */
   exclusivePresets: string[];
+  /** 是否显示 llama 面板（模型库 / 一键体验 / 显存估算）；未配置 llama 能力时不显示 */
+  showModelPanel?: boolean;
 }
 
-const MODELS_ROOT = 'D:\\LLM Model\\llama.cpp\\models';
-const OV_PYTHON = 'D:\\Python\\Python312\\python.exe';
-const OV_RUNNER = 'D:\\deepseek\\ov-data\\run-server.py';
-const OV_CONF = 'D:\\deepseek\\ov-data\\ov.conf';
-
-function defaultServices(): Record<string, ServiceConfig> {
-  return {
-    vlm: {
-      label: 'VLM · Qwen2.5-VL-7B',
-      role: 'vlm',
-      model: `${MODELS_ROOT}\\Qwen2.5-VL-7B\\qwen2.5-vl-7b-instruct-Q4_K_M.gguf`,
-      mmproj: `${MODELS_ROOT}\\Qwen2.5-VL-7B\\mmproj-f16.gguf`,
-      alias: 'qwen2.5-vl-7b',
-      port: 11435,
-      args: ['--ctx-size', '8192', '--parallel', '1', '--flash-attn', 'on', '-ngl', '99', '-b', '512', '--threads', '6', '--cache-type-k', 'q8_0', '--cache-type-v', 'q8_0', '--jinja'],
-      autostart: false,
-      enabled: true,
-    },
-    embedding: {
-      label: 'Embedding · bge-m3',
-      role: 'embedding',
-      model: `${MODELS_ROOT}\\bge-m3\\bge-m3-Q8_0.gguf`,
-      mmproj: '',
-      alias: 'bge-m3',
-      port: 11436,
-      args: ['--embeddings', '--ctx-size', '8192', '--threads', '6', '-ngl', '99'],
-      autostart: false,
-      enabled: true,
-    },
-    intent: {
-      label: 'Intent · ov_intent_analysis_sft',
-      role: 'intent',
-      model: `${MODELS_ROOT}\\ov_intent_analysis_sft\\ov_intent_analysis_sft-Q8_0.gguf`,
-      mmproj: '',
-      alias: 'ov_intent_analysis_sft',
-      port: 11437,
-      args: ['--ctx-size', '8192', '--parallel', '1', '-ngl', '99', '-b', '512', '--threads', '6', '--jinja', '--reasoning', 'off'],
-      autostart: false,
-      enabled: true,
-    },
-    'chat-27b': {
-      label: 'Chat · Qwen3.8-27B',
-      role: 'chat',
-      model: `${MODELS_ROOT}\\Qwen3.8-27B\\Qwen3.8-27B-UD-Q4_K_XL.gguf`,
-      mmproj: '',
-      alias: 'qwen3.8-27b',
-      port: 8080,
-      args: ['--ctx-size', '98304', '--parallel', '1', '--flash-attn', 'on', '-ngl', '99', '-ub', '64', '-b', '512', '--load-mode', 'none', '--threads', '6', '--cache-type-k', 'q8_0', '--cache-type-v', 'q8_0', '--spec-type', 'draft-mtp', '--spec-draft-n-max', '2', '--spec-draft-p-min', '0.4', '--jinja', '--tools', 'all', '--metrics'],
-      autostart: false,
-      enabled: true,
-    },
-    reranker: {
-      label: 'Rerank · Qwen3-Reranker-0.6B',
-      role: 'rerank',
-      model: `${MODELS_ROOT}\\Qwen3-Reranker-0.6B\\Qwen3-Reranker-0.6B-Q4_K_M.gguf`,
-      mmproj: '',
-      alias: 'qwen3-reranker-0.6b',
-      port: 11438,
-      args: ['--reranking', '--pooling', 'rank', '--embedding', '--ctx-size', '8192', '-ngl', '99'],
-      autostart: false,
-      enabled: true,
-    },
-    'ov-server': {
-      label: 'OpenViking 服务',
-      role: 'ov',
-      model: '',
-      mmproj: '',
-      alias: '',
-      port: 1933,
-      args: [OV_RUNNER, '--config', OV_CONF],
-      autostart: false,
-      enabled: true,
-      command: OV_PYTHON,
-      cwd: 'D:\\deepseek\\ov-data',
-      env: { PYTHONUNBUFFERED: '1' },
-    },
-  };
-}
-
-function defaultPresets(): Record<string, string[]> {
-  return {
-    'OpenViking 组': ['vlm', 'embedding', 'intent', 'ov-server'],
-    聊天组: ['chat-27b'],
-  };
-}
-
+/**
+ * 默认配置不含任何与本机路径绑定的服务：
+ * 服务与预设组由用户创建，或由旧版本配置文件迁移带入。
+ */
 export function defaultConfig(): AppConfig {
   return {
-    llamaServerPath: 'D:\\LLM Model\\llama.cpp\\runtime\\llama-server.exe',
-    scanRoots: ['D:\\LLM Model'],
+    llamaServerPath: '',
+    scanRoots: [],
+    modelsRoot: '',
     maxRestarts: 5,
-    autostartOnLogin: true,
+    autostartOnLogin: false,
     vramWarnThreshold: 90,
-    services: defaultServices(),
-    presets: defaultPresets(),
+    services: {},
+    presets: {},
     exclusivePresets: [],
+    showModelPanel: true,
   };
 }
+
+/** 未知服务及缺失字段的兜底值。 */
+const EMPTY_SERVICE: ServiceConfig = {
+  label: '',
+  role: '',
+  model: '',
+  mmproj: '',
+  alias: '',
+  port: 0,
+  args: [],
+  autostart: false,
+  enabled: true,
+};
+
+/** 读取边界归一化：配置文件可能被手工编辑，字段类型不可信。 */
+function normalizeService(raw: unknown): ServiceConfig {
+  const svc = { ...EMPTY_SERVICE, ...(raw as Partial<ServiceConfig>) };
+  return {
+    ...svc,
+    args: Array.isArray(svc.args) ? svc.args.map(String) : [],
+    port: Number.isFinite(Number(svc.port)) ? Number(svc.port) : 0,
+    autostart: svc.autostart === true,
+    enabled: svc.enabled !== false,
+    composeProfiles: Array.isArray(svc.composeProfiles) ? svc.composeProfiles.map(String) : [],
+  };
+}
+
+/**
+ * 合并磁盘配置与内置默认值。
+ * 服务与预设组的存在性以磁盘为准（删除内置项后不再复活），仅为保留项补齐缺失字段。
+ * 整段缺失（旧版本配置文件或手工裁剪过的文件）才回退到内置默认值。
+ */
+export function mergeLoadedConfig(raw: unknown, base: AppConfig): AppConfig {
+  const source = (raw ?? {}) as Partial<AppConfig>;
+  const diskServices = source.services && typeof source.services === 'object' ? source.services : base.services;
+  const services: Record<string, ServiceConfig> = {};
+  for (const [id, svc] of Object.entries(diskServices)) {
+    services[id] = normalizeService(svc);
+  }
+  return {
+    ...base,
+    ...source,
+    services,
+    presets: source.presets && typeof source.presets === 'object' ? source.presets : base.presets,
+    exclusivePresets: Array.isArray(source.exclusivePresets) ? source.exclusivePresets : [],
+  };
+}
+
+/** 自身写入后忽略外部变更回调的时间窗：watchFile 轮询间隔 1500ms，留出余量。 */
+const SELF_WRITE_WINDOW_MS = 2500;
 
 export class ConfigStore {
   private file: string;
-  /** 应用自身 save 触发 watch 时置位，避免自触发外部变更回调 */
-  private suppressNext = false;
+  /** 最近一次自身写入的时间戳，用于区分外部修改 */
+  private lastSelfWriteAt = 0;
 
-  constructor() {
-    this.file = join(app.getPath('userData'), 'services.json');
+  constructor(file: string) {
+    this.file = file;
   }
 
   load(): AppConfig {
@@ -155,23 +150,15 @@ export class ConfigStore {
       return cfg;
     }
     try {
-      const raw = JSON.parse(readFileSync(this.file, 'utf-8'));
-      const base = defaultConfig();
-      return {
-        ...base,
-        ...raw,
-        services: { ...base.services, ...(raw.services ?? {}) },
-        presets: { ...base.presets, ...(raw.presets ?? {}) },
-        exclusivePresets: Array.isArray(raw.exclusivePresets) ? raw.exclusivePresets : [],
-      };
+      return mergeLoadedConfig(JSON.parse(readFileSync(this.file, 'utf-8')), defaultConfig());
     } catch {
       return defaultConfig();
     }
   }
 
   save(config: AppConfig): void {
-    this.suppressNext = true;
-    mkdirSync(join(app.getPath('userData')), { recursive: true });
+    this.lastSelfWriteAt = Date.now();
+    mkdirSync(dirname(this.file), { recursive: true });
     writeFileSync(this.file, JSON.stringify(config, null, 2));
   }
 
@@ -181,15 +168,13 @@ export class ConfigStore {
   }
 
   /**
-   * 监听配置文件的外部修改（应用自身 save 会被 suppress 抑制）。
+   * 监听配置文件的外部修改。自身写入通过时间窗抑制，
+   * 不用一次性标志位，避免自身写入的回调未触发时永久吞掉后续外部变更。
    * 返回停止监听的函数。
    */
   watch(onExternalChange: () => void): () => void {
     watchFile(this.file, { interval: 1500 }, () => {
-      if (this.suppressNext) {
-        this.suppressNext = false;
-        return;
-      }
+      if (Date.now() - this.lastSelfWriteAt < SELF_WRITE_WINDOW_MS) return;
       onExternalChange();
     });
     return () => {

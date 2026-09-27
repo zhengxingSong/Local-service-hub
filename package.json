@@ -1,8 +1,8 @@
 {
-  "name": "llama-manager",
-  "productName": "LLaMA 模型管理器",
-  "version": "0.3.1",
-  "description": "管理并启动 llama.cpp 本地模型服务",
+  "name": "service-hub",
+  "productName": "服务中枢",
+  "version": "0.4.0",
+  "description": "统一管理本机 llama.cpp 模型服务、任意命令进程与 Docker Compose 容器栈",
   "main": "dist/main/index.js",
   "type": "module",
   "private": true,
@@ -12,10 +12,9 @@
     "build": "npm run build:main && npm run build:renderer",
     "dev:renderer": "vite",
     "start": "npm run build && electron .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "dist": "npm run build && electron-builder"
-  },
-  "dependencies": {
-    "lucide-react": "^1.41.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
@@ -25,9 +24,11 @@
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8",
     "esbuild": "^0.28.2",
+    "lucide-react": "^1.41.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "typescript": "^5.7.0",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "vitest": "^2.1.8"
   }
 }

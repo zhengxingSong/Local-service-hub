@@ -1,3 +1,11 @@
+export type ServiceKind = 'llama' | 'command' | 'compose';
+
+export type HealthCheck =
+  | { type: 'none' }
+  | { type: 'tcp' }
+  | { type: 'http'; path?: string; expectStatus?: number; expectBody?: string }
+  | { type: 'openai-models'; path?: string; expectAlias?: string };
+
 export interface ServiceView {
   id: string;
   state: string;
@@ -14,6 +22,9 @@ export interface ServiceView {
   mmproj: string;
   alias: string;
   port: number;
+  args: string[];
+  kind: ServiceKind;
+  healthCheckType: string;
   autostart: boolean;
   enabled: boolean;
   isCommand: boolean;
@@ -41,6 +52,13 @@ export interface ModelEntry {
   siblingMmproj: string | null;
 }
 
+export interface DownloadResult {
+  ok: boolean;
+  path?: string;
+  error?: string;
+  sha256Verified?: boolean;
+}
+
 export interface ServiceConfig {
   label: string;
   role: string;
@@ -51,6 +69,8 @@ export interface ServiceConfig {
   args: string[];
   autostart: boolean;
   enabled: boolean;
+  kind?: ServiceKind;
+  healthCheck?: HealthCheck;
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
@@ -63,10 +83,12 @@ export interface ServiceConfig {
 export interface AppConfig {
   llamaServerPath: string;
   scanRoots: string[];
+  modelsRoot: string;
   maxRestarts: number;
   autostartOnLogin: boolean;
   vramWarnThreshold: number;
   services: Record<string, ServiceConfig>;
   presets: Record<string, string[]>;
   exclusivePresets: string[];
+  showModelPanel?: boolean;
 }

@@ -1,8 +1,11 @@
-import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { app } from 'electron';
+import { execFile } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { stat } from 'node:fs/promises';
+import { dirname } from 'node:path';
+import { promisify } from 'node:util';
 import type { ServiceConfig } from './config';
+
+const execFileAsync = promisify(execFile);
 
 export interface VramEstimate {
   /** 公式估算（MB），null 表示不参与 GPU 预算（command/compose） */
@@ -18,17 +21,33 @@ interface CacheEntry {
   updatedAt: string;
 }
 
+export interface VramEstimatorOptions {
+  /** 查询进程显存占用（nvidia-smi 输出），测试可注入 */
+  queryComputeApps?: () => Promise<string>;
+}
+
+const defaultQueryComputeApps = async (): Promise<string> => {
+  const { stdout } = await execFileAsync(
+    'nvidia-smi',
+    ['--query-compute-apps=pid,used_memory', '--format=csv,noheader,nounits'],
+    { encoding: 'utf8', timeout: 8000, windowsHide: true },
+  );
+  return String(stdout);
+};
+
 /**
  * 显存预算估算器：先用 GGUF 文件大小 + KV 余量做公式估算，
- * 服务启动后按 nvidia-smi 计算进程显存增量回填实测值，后续优先用实测。
- * 缓存持久化在 %APPDATA%/LLaMA 模型管理器/vram-cache.json。
+ * 服务启动后按 nvidia-smi 采样进程显存回填实测值，后续优先用实测。
+ * 缓存持久化在 userData/vram-cache.json。
  */
 export class VramEstimator {
   private cacheFile: string;
   private cache: Record<string, CacheEntry> = {};
+  private queryComputeApps: () => Promise<string>;
 
-  constructor() {
-    this.cacheFile = join(app.getPath('userData'), 'vram-cache.json');
+  constructor(cacheFile: string, options: VramEstimatorOptions = {}) {
+    this.cacheFile = cacheFile;
+    this.queryComputeApps = options.queryComputeApps ?? defaultQueryComputeApps;
     this.load();
   }
 
@@ -42,21 +61,20 @@ export class VramEstimator {
 
   private save(): void {
     try {
-      mkdirSync(join(app.getPath('userData')), { recursive: true });
+      mkdirSync(dirname(this.cacheFile), { recursive: true });
       writeFileSync(this.cacheFile, JSON.stringify(this.cache, null, 2));
     } catch { /* 写缓存失败忽略 */ }
   }
 
+  /** 缓存键包含模型、mmproj、上下文长度与 GPU 层数：任一变化都需重新估算。 */
   private cacheKey(config: ServiceConfig): string {
-    const idx = config.args.findIndex((a) => a === '--ctx-size');
-    const ctx = idx >= 0 ? String(config.args[idx + 1]) : 'default';
-    const idx2 = config.args.findIndex((a) => a === '-ngl');
-    const ngl = idx2 >= 0 ? String(config.args[idx2 + 1]) : 'default';
-    return `${config.model}|${ctx}|${ngl}`;
+    const ctx = readArg(config.args, '--ctx-size') ?? 'default';
+    const ngl = readArg(config.args, '-ngl') ?? 'default';
+    return `${config.model}|${config.mmproj ?? ''}|${ctx}|${ngl}`;
   }
 
   /** 返回预估（优先实测回填值）。command/compose 服务返回 null。 */
-  estimate(config: ServiceConfig): VramEstimate {
+  async estimate(config: ServiceConfig): Promise<VramEstimate> {
     if (!config.model || config.command || config.composeDir) {
       return { estimateMB: null, actualMB: null };
     }
@@ -66,9 +84,9 @@ export class VramEstimator {
       return { estimateMB: cached.estimateMB, actualMB: cached.actualMB };
     }
     let bytes = 0;
-    try { bytes += statSync(config.model).size; } catch { /* 模型不存在时不参与估算 */ }
+    try { bytes += (await stat(config.model)).size; } catch { /* 模型不存在时不参与估算 */ }
     if (config.mmproj) {
-      try { bytes += statSync(config.mmproj).size; } catch { /* ignore */ }
+      try { bytes += (await stat(config.mmproj)).size; } catch { /* ignore */ }
     }
     const estimateMB = Math.round(bytes / 1024 / 1024 * 1.12); // +12% KV/计算 buffer 余量
     this.cache[key] = { key, estimateMB, actualMB: null, updatedAt: new Date().toISOString() };
@@ -76,16 +94,12 @@ export class VramEstimator {
     return { estimateMB, actualMB: null };
   }
 
-  /** 用 nvidia-smi 采样某进程的显存占用并回填缓存。pid 未知或采样失败时静默跳过。 */
-  recordActual(config: ServiceConfig, pid: number | null): void {
+  /** 采样某进程的显存占用并回填缓存。pid 未知或采样失败时静默跳过。 */
+  async recordActual(config: ServiceConfig, pid: number | null): Promise<void> {
     if (!config.model || !pid) return;
     let used = 0;
     try {
-      const out = execFileSync('nvidia-smi', ['--query-compute-apps=pid,used_memory', '--format=csv,noheader,nounits'], {
-        encoding: 'utf8',
-        timeout: 8000,
-        windowsHide: true,
-      });
+      const out = await this.queryComputeApps();
       for (const line of out.split(/\r?\n/)) {
         const m = line.match(/^\s*(\d+),\s*([\d.]+)/);
         if (m && Number(m[1]) === pid) {
@@ -110,4 +124,11 @@ export class VramEstimator {
     this.cache = {};
     try { writeFileSync(this.cacheFile, '{}'); } catch { /* ignore */ }
   }
+}
+
+/** 读取 `--key value` 形式参数的值 */
+function readArg(args: string[] | undefined, key: string): string | null {
+  const list = args ?? [];
+  const idx = list.findIndex((a) => a === key);
+  return idx >= 0 && idx + 1 < list.length ? String(list[idx + 1]) : null;
 }

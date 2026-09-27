@@ -1,5 +1,5 @@
-appId: com.local.llama-manager
-productName: LLaMA 模型管理器
+appId: com.local.service-hub
+productName: 服务中枢
 directories:
   output: release
   buildResources: resources
@@ -23,7 +23,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: LLaMA 模型管理器
+  shortcutName: 服务中枢
   artifactName: ${productName}-Setup-${version}.${ext}
   deleteAppDataOnUninstall: false
 

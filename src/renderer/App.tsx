@@ -1,24 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Settings, LogOut, Plus, Download, HardDrive, RefreshCw } from 'lucide-react';
-import { AppConfig, GpuInfo, ModelEntry, ServiceConfig, ServiceView } from './types';
+import { AppConfig, DownloadResult, GpuInfo, ModelEntry, ServiceConfig, ServiceView } from './types';
 import { ServiceCard, basename, formatSize } from './components/ServiceCard';
 import { PresetBar } from './components/PresetBar';
 import { PresetManager } from './components/PresetManager';
 import { ServiceEditor } from './components/ServiceEditor';
 import { SettingsPanel } from './components/SettingsPanel';
 import { LogViewer } from './components/LogViewer';
+import { DownloadDialog } from './components/DownloadDialog';
 
 type EditorState = { id: string | null; cfg: ServiceConfig | null } | null;
 
-function slug(text: string): string {
-  return (text || 'service')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'service';
-}
+/** 状态轮询间隔：状态变更还会由主进程主动推送，这里只做兜底与显存刷新 */
+const POLL_INTERVAL_MS = 5000;
+const MODEL_PAGE_SIZE = 20;
 
 export function App() {
-  const api = window.llamaApi;
+  const api = window.serviceHubApi;
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [services, setServices] = useState<ServiceView[]>([]);
   const [gpu, setGpu] = useState<GpuInfo | null>(null);
@@ -28,9 +26,10 @@ export function App() {
   const [editor, setEditor] = useState<EditorState>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
+  const [showDownload, setShowDownload] = useState(false);
   const [logId, setLogId] = useState<string | null>(null);
   const [configNotice, setConfigNotice] = useState(false);
-  const [downloading, setDownloading] = useState(false);
+  const [modelVisible, setModelVisible] = useState(MODEL_PAGE_SIZE);
   const bannerTimer = useRef<number | null>(null);
 
   const showBanner = useCallback((kind: 'ok' | 'error', text: string) => {
@@ -41,30 +40,49 @@ export function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const [cfg, status, modelList] = await Promise.all([api.getConfig(), api.status(), api.scanModels()]);
+      const [cfg, status] = await Promise.all([api.getConfig(), api.status()]);
       setConfig(cfg);
       setServices(status.services ?? []);
       setGpu(status.gpu ?? null);
-      setModels(modelList ?? []);
     } catch (err) {
       showBanner('error', `状态加载失败: ${err instanceof Error ? err.message : String(err)}`);
     }
   }, [api, showBanner]);
 
+  // llama 能力是否可用：配置了 llama-server 或扫描根目录之一即认为使用 llama
+  const llamaConfigured = Boolean(config && (config.llamaServerPath || (config.scanRoots?.length ?? 0) > 0));
+  const showModelPanel = Boolean(config && config.showModelPanel !== false && llamaConfigured);
+  const scanRootsKey = (config?.scanRoots ?? []).join('|');
+
+  const refreshModels = useCallback(async (force = false) => {
+    if (!api) return;
+    try {
+      setModels((await api.scanModels({ force })) as ModelEntry[]);
+    } catch { /* 扫描失败保留上一次结果 */ }
+  }, [api]);
+
   useEffect(() => {
     void refresh();
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'visible') void refresh();
-    }, 3000);
+    }, POLL_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, [refresh]);
+
+  // 模型扫描独立于状态轮询：主进程按 10 秒缓存，避免每次刷新都全盘遍历
+  useEffect(() => {
+    if (!llamaConfigured) {
+      setModels([]);
+      return;
+    }
+    void refreshModels();
+  }, [llamaConfigured, scanRootsKey, refreshModels]);
 
   useEffect(() => api.onServicesChanged(({ services: svc, gpu: g }) => {
     setServices(svc ?? []);
     setGpu(g ?? null);
   }), [api]);
 
-  // P0-3 配置热加载：外部修改 services.json 时提示
   useEffect(() => api.onConfigChanged(() => setConfigNotice(true)), [api]);
 
   useEffect(() => () => {
@@ -78,7 +96,7 @@ export function App() {
       showBanner('ok', okText);
       await refresh();
     } catch (err) {
-      showBanner('error', `${err instanceof Error ? err.message : String(err)}`);
+      showBanner('error', err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -87,7 +105,6 @@ export function App() {
   const saveConfig = (next: AppConfig) => {
     setConfig(next);
     void doAction(() => api.saveConfig(next), '配置已保存');
-    void refresh();
   };
 
   const toggleAutostart = (id: string) => {
@@ -97,7 +114,7 @@ export function App() {
     saveConfig({ ...config, services: { ...config.services, [id]: { ...svc, autostart: !svc.autostart } } });
   };
 
-  // P0-2 组互斥：启动独占组时，先确认停止其他运行中的组
+  // 组互斥：启动独占组时，先确认停止其他运行中的组
   const startPreset = async (name: string, members: string[]) => {
     const exclusive = config?.exclusivePresets?.includes(name);
     let proceed = true;
@@ -132,51 +149,40 @@ export function App() {
     for (const id of members) void doAction(() => api.stop(id), `已停止 ${id}`);
   };
 
-  // P1-2 模型即卡片：一键体验未配置模型
   const startTrial = async (m: ModelEntry) => {
     await doAction(() => api.startTrial(m.path, m.siblingMmproj ?? undefined), `已临时启动 ${basename(m.path)}`);
   };
 
-  // P1-2 转正：把临时服务写入持久配置
+  /** 转正：主进程用体验服务的完整参数写入持久配置并启动，避免丢失启动参数 */
   const promote = async (id: string) => {
     const svc = services.find((s) => s.id === id);
-    if (!svc || !config) return;
-    if (!window.confirm(`将「${svc.label}」转正为持久服务？`)) return;
-    const newId = slug(svc.label || basename(svc.model));
-    const cfg: ServiceConfig = {
-      label: svc.label,
-      role: svc.role,
-      model: svc.model,
-      mmproj: svc.mmproj,
-      alias: svc.alias,
-      port: svc.port,
-      args: [],
-      autostart: false,
-      enabled: true,
-    };
-    // trial 的 args 由主进程生成，这里无法直接拿到原始 args 数组（view 未透传）。
-    // 使用最小参数集：主进程 startTrial 已按推荐参数运行，转正后采用相同端口与 alias。
-    const nextServices = { ...config.services, [newId]: cfg };
-    if (config.services[newId]) delete nextServices[id]; // 同 id 冲突时保留持久条目
-    saveConfig({ ...config, services: nextServices });
+    if (!svc) return;
+    if (!window.confirm(`将「${svc.label}」转正为持久服务？将使用与体验时相同的启动参数。`)) return;
+    setBusy(true);
+    try {
+      const next = await api.promote({ trialId: id }) as AppConfig;
+      setConfig(next);
+      showBanner('ok', `已转正为持久服务：${svc.label}`);
+      await refresh();
+    } catch (err) {
+      showBanner('error', err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
-  // P1-3 下载器
-  const downloadByName = async () => {
-    const name = window.prompt('输入要下载的模型名（在 hf-mirror 搜索，例如 Qwen3-Reranker-0.6B）：');
-    if (!name) return;
-    setDownloading(true);
-    try {
-      const res = await api.downloadModel({ name });
-      if (res.ok) {
-        showBanner('ok', `下载完成：${res.path}`);
-        await refresh();
-      } else {
-        showBanner('error', res.error ?? '下载失败');
-      }
-    } finally {
-      setDownloading(false);
-    }
+  const dropTrial = async (id: string) => {
+    const svc = services.find((s) => s.id === id);
+    if (!svc) return;
+    if (!window.confirm(`停止并移除体验服务「${svc.label}」？`)) return;
+    await doAction(() => api.dropTrial(id), '已移除体验服务');
+  };
+
+  const onDownloadDone = async (res: DownloadResult) => {
+    setShowDownload(false);
+    showBanner('ok', `下载完成${res.sha256Verified ? '（SHA256 校验通过）' : ''}：${res.path ?? ''}`);
+    await refreshModels(true);
+    await refresh();
   };
 
   const applyReloadedConfig = async () => {
@@ -197,14 +203,14 @@ export function App() {
 
   // 未配置成服务的模型（模型库一键体验）
   const configuredModels = new Set(Object.values(config?.services ?? {}).map((s) => s.model).filter(Boolean));
-  const freeModels = models.filter((m) => !configuredModels.has(m.path)).slice(0, 20);
+  const freeModels = models.filter((m) => !configuredModels.has(m.path));
 
   return (
     <div className="app">
       <header className="header">
         <div className="header-brand">
-          <div className="header-title">LLaMA 模型管理器</div>
-          <div className="header-sub">llama.cpp 本地模型服务</div>
+          <div className="header-title">服务中枢</div>
+          <div className="header-sub">本机服务 · 进程 · 容器</div>
         </div>
         <div className="header-spacer" />
         <button className="btn" onClick={() => setShowSettings(true)}><Settings size={15} /> 设置</button>
@@ -238,7 +244,7 @@ export function App() {
           </div>
         )}
 
-        {config && (
+        {config && Object.keys(config.presets).length > 0 && (
           <PresetBar
             presets={config.presets}
             serviceStates={serviceStates}
@@ -249,37 +255,44 @@ export function App() {
           />
         )}
 
-        {freeModels.length > 0 && (
+        {showModelPanel && (
           <div className="model-lib">
             <div className="model-lib-head">
-              <span>模型库 · 一键体验（未配置 {freeModels.length}）</span>
-              <button className="btn small ghost" disabled={downloading} onClick={() => void downloadByName()}>
-                <Download size={13} /> 下载模型
-              </button>
+              <span>llama 模型库 · 一键体验（未配置 {freeModels.length}）</span>
+              <div className="model-lib-actions">
+                <button className="btn small ghost" onClick={() => void refreshModels(true)}><RefreshCw size={13} /> 刷新</button>
+                <button className="btn small ghost" onClick={() => setShowDownload(true)}><Download size={13} /> 下载模型</button>
+              </div>
             </div>
             <div className="model-lib-grid">
-              {freeModels.map((m) => (
+              {freeModels.slice(0, modelVisible).map((m) => (
                 <div key={m.path} className="model-chip" title={m.path}>
                   <span className="model-chip-name">{basename(m.name)}</span>
                   <span className="model-chip-size">{formatSize(m.sizeBytes)}</span>
-                  <button
-                    className="btn small"
-                    disabled={busy || downloading}
-                    onClick={() => void startTrial(m)}
-                  >一键体验</button>
+                  <button className="btn small" disabled={busy} onClick={() => void startTrial(m)}>一键体验</button>
                 </div>
               ))}
             </div>
+            {freeModels.length > modelVisible && (
+              <button className="btn small ghost model-more" onClick={() => setModelVisible((n) => n + MODEL_PAGE_SIZE)}>
+                显示更多（还有 {freeModels.length - modelVisible} 个）
+              </button>
+            )}
           </div>
         )}
 
         <div className="toolbar">
           <button className="btn primary" onClick={() => setEditor({ id: null, cfg: null })}><Plus size={15} /> 新增服务</button>
-          <span className="count">{models.length} 个可加载模型 · {services.length} 个服务</span>
+          <span className="count">
+            {services.length} 个服务
+            {showModelPanel && ` · ${models.length} 个可加载模型`}
+          </span>
         </div>
 
         {services.length === 0 ? (
-          <div className="empty">暂无服务配置，点击「新增服务」添加，或在上方模型库中「一键体验」</div>
+          <div className="empty">
+            暂无服务。点击「新增服务」添加 llama.cpp 模型服务、任意命令进程或 Docker Compose 容器栈。
+          </div>
         ) : (
           <div className="cards">
             {services.map((svc) => (
@@ -304,6 +317,7 @@ export function App() {
                 onToggleAutostart={toggleAutostart}
                 onOpenLog={(id) => setLogId(id)}
                 onPromote={(id) => void promote(id)}
+                onDropTrial={(id) => void dropTrial(id)}
               />
             ))}
           </div>
@@ -313,8 +327,10 @@ export function App() {
       {editor && config && (
         <ServiceEditor
           initial={editor.cfg}
+          initialId={editor.id}
           existingIds={Object.keys(config.services)}
           models={models}
+          llamaConfigured={llamaConfigured}
           onSave={(id, cfg) => {
             const services = { ...config.services, [id]: cfg };
             if (editor.id && editor.id !== id && config.services[editor.id]) delete services[editor.id];
@@ -339,12 +355,23 @@ export function App() {
         />
       )}
 
+      {showDownload && (
+        <DownloadDialog
+          onClose={() => setShowDownload(false)}
+          onDone={(res) => void onDownloadDone(res)}
+          onDownload={(req) => api.downloadModel(req) as Promise<DownloadResult>}
+          onCancel={() => api.cancelDownload()}
+          onProgress={api.onDownloadProgress}
+        />
+      )}
+
       {logId && (
         <LogViewer
           serviceId={logId}
           onClose={() => setLogId(null)}
           getLog={(id, tail) => api.getLog(id, tail)}
           clearLog={(id) => api.clearLog(id)}
+          openLogDir={() => api.openLogDir()}
         />
       )}
     </div>

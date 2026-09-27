@@ -12,6 +12,9 @@ export interface ServiceView {
   mmproj: string;
   alias: string;
   port: number;
+  args: string[];
+  kind: string;
+  healthCheckType: string;
   autostart: boolean;
   enabled: boolean;
   listening: boolean;
@@ -29,6 +32,12 @@ export interface DownloadResult {
   ok: boolean;
   path?: string;
   error?: string;
+  sha256Verified?: boolean;
+}
+
+export interface DownloadProgress {
+  receivedBytes: number;
+  totalBytes: number;
 }
 
 const api = {
@@ -40,11 +49,14 @@ const api = {
   restart: (id: string) => ipcRenderer.invoke('services:restart', id),
   getLog: (id: string, tail?: number) => ipcRenderer.invoke('services:log', id, tail),
   clearLog: (id: string) => ipcRenderer.invoke('services:clear-log', id),
-  scanModels: () => ipcRenderer.invoke('models:scan'),
+  scanModels: (options?: { force?: boolean }) => ipcRenderer.invoke('models:scan', options),
   startTrial: (model: string, mmproj?: string) => ipcRenderer.invoke('services:start-trial', { model, mmproj }),
+  promote: (req: { trialId: string; id?: string }) => ipcRenderer.invoke('services:promote', req),
+  dropTrial: (trialId: string) => ipcRenderer.invoke('services:drop-trial', trialId),
   reloadConfig: () => ipcRenderer.invoke('app:reload-config'),
-  downloadModel: (req: { name?: string; url?: string }) => ipcRenderer.invoke('models:download', req),
-  windowControl: (action: 'hide' | 'minimize' | 'close') => ipcRenderer.invoke('app:window-control', action),
+  downloadModel: (req: { name?: string; url?: string; sha256?: string }) => ipcRenderer.invoke('models:download', req),
+  cancelDownload: () => ipcRenderer.invoke('models:download-cancel'),
+  openLogDir: () => ipcRenderer.invoke('app:open-log-dir'),
   quit: () => ipcRenderer.invoke('app:quit'),
   onServicesChanged: (cb: (payload: { services: ServiceView[]; gpu: GpuInfo | null }) => void) => {
     const listener = (_e: unknown, payload: { services: ServiceView[]; gpu: GpuInfo | null }) => cb(payload);
@@ -56,6 +68,11 @@ const api = {
     ipcRenderer.on('app:config-changed', listener);
     return () => ipcRenderer.removeListener('app:config-changed', listener);
   },
+  onDownloadProgress: (cb: (payload: DownloadProgress) => void) => {
+    const listener = (_e: unknown, payload: DownloadProgress) => cb(payload);
+    ipcRenderer.on('models:download-progress', listener);
+    return () => ipcRenderer.removeListener('models:download-progress', listener);
+  },
 };
 
-contextBridge.exposeInMainWorld('llamaApi', api);
+contextBridge.exposeInMainWorld('serviceHubApi', api);

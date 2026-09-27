@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { FolderOpen } from 'lucide-react';
 
 interface Props {
   serviceId: string;
   onClose: () => void;
   getLog: (id: string, tail?: number) => Promise<string>;
   clearLog: (id: string) => Promise<boolean>;
+  openLogDir: () => Promise<boolean>;
 }
 
-export function LogViewer({ serviceId, onClose, getLog, clearLog }: Props) {
+export function LogViewer({ serviceId, onClose, getLog, clearLog, openLogDir }: Props) {
   const [log, setLog] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -42,6 +44,7 @@ export function LogViewer({ serviceId, onClose, getLog, clearLog }: Props) {
         <div className="panel-head">
           <span className="panel-title">日志 · {serviceId}</span>
           <div style={{ display: 'flex', gap: 6 }}>
+            <button className="btn small" onClick={() => void openLogDir()}><FolderOpen size={13} /> 打开目录</button>
             <button className="btn small" onClick={() => void clearLog(serviceId).then(() => setLog(''))}>清空</button>
             <button className="btn small ghost" onClick={onClose}>关闭</button>
           </div>

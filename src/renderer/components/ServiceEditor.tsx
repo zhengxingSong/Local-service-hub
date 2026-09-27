@@ -1,14 +1,18 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { ModelEntry, ServiceConfig } from '../types';
+import { HealthCheck, ModelEntry, ServiceConfig, ServiceKind } from '../types';
 import { basename, formatSize } from './ServiceCard';
 
-type Mode = 'llama' | 'command' | 'compose';
+type HealthMode = 'default' | 'none' | 'tcp' | 'http' | 'openai-models';
 
 interface Props {
   initial: ServiceConfig | null; // null = 新增
+  /** 编辑时的原始服务 id：保存必须沿用，否则会把服务改名成空 id */
+  initialId: string | null;
   existingIds: string[];
   models: ModelEntry[];
+  /** 是否已配置 llama 能力（llama-server 路径或扫描根目录） */
+  llamaConfigured: boolean;
   onSave: (id: string, cfg: ServiceConfig) => void;
   onCancel: () => void;
 }
@@ -25,8 +29,12 @@ interface LlamaForm {
   extraArgs: string;
 }
 
+function newForm(): LlamaForm {
+  return { ctxSize: '8192', ngl: '99', threads: '6', parallel: '1', flashAttn: true, cacheTypeK: 'q8_0', cacheTypeV: 'q8_0', jinja: true, extraArgs: '' };
+}
+
 function parseArgs(args: string[]): { form: LlamaForm; used: string[] } {
-  const form: LlamaForm = { ctxSize: '8192', ngl: '99', threads: '6', parallel: '1', flashAttn: true, cacheTypeK: 'q8_0', cacheTypeV: 'q8_0', jinja: true, extraArgs: '' };
+  const form: LlamaForm = newForm();
   const used: string[] = [];
   const get = (flag: string): string | undefined => {
     const i = args.findIndex((a, idx) => a === flag && !used.includes(String(idx)));
@@ -67,14 +75,12 @@ function buildArgs(form: LlamaForm): string[] {
   return [...extra, ...tokens];
 }
 
-export function ServiceEditor({ initial, existingIds, models, onSave, onCancel }: Props) {
+export function ServiceEditor({ initial, initialId, existingIds, models, llamaConfigured, onSave, onCancel }: Props) {
   const initialArgs = initial?.args ?? [];
   const parsed = (() => { try { return parseArgs(initialArgs); } catch { return { form: newForm(), used: [] }; } })();
-  function newForm(): LlamaForm {
-    return { ctxSize: '8192', ngl: '99', threads: '6', parallel: '1', flashAttn: true, cacheTypeK: 'q8_0', cacheTypeV: 'q8_0', jinja: true, extraArgs: '' };
-  }
 
-  const [mode, setMode] = useState<Mode>(initial?.composeDir ? 'compose' : initial?.command ? 'command' : 'llama');
+  const initialKind: ServiceKind = initial?.kind ?? (initial?.composeDir ? 'compose' : initial?.command ? 'command' : 'llama');
+  const [mode, setMode] = useState<ServiceKind>(initialKind === 'llama' && !llamaConfigured ? 'command' : initialKind);
   const [label, setLabel] = useState(initial?.label ?? '');
   const [role, setRole] = useState(initial?.role ?? '');
   const [model, setModel] = useState(initial?.model ?? '');
@@ -92,6 +98,21 @@ export function ServiceEditor({ initial, existingIds, models, onSave, onCancel }
   const [composeDir, setComposeDir] = useState(initial?.composeDir ?? '');
   const [composeFile, setComposeFile] = useState(initial?.composeFile ?? '');
   const [composeProfilesText, setComposeProfilesText] = useState((initial?.composeProfiles ?? []).join('\n'));
+  const [healthMode, setHealthMode] = useState<HealthMode>(initial?.healthCheck?.type ?? 'default');
+  const [healthPath, setHealthPath] = useState(
+    initial?.healthCheck && 'path' in initial.healthCheck ? initial.healthCheck.path ?? '' : '',
+  );
+  const [healthStatus, setHealthStatus] = useState(
+    initial?.healthCheck?.type === 'http' && initial.healthCheck.expectStatus !== undefined
+      ? String(initial.healthCheck.expectStatus)
+      : '',
+  );
+  const [healthBody, setHealthBody] = useState(
+    initial?.healthCheck?.type === 'http' ? initial.healthCheck.expectBody ?? '' : '',
+  );
+  const [healthAlias, setHealthAlias] = useState(
+    initial?.healthCheck?.type === 'openai-models' ? initial.healthCheck.expectAlias ?? '' : '',
+  );
   const [autostart, setAutostart] = useState(initial?.autostart ?? false);
   const [enabled, setEnabled] = useState(initial?.enabled ?? true);
   const [error, setError] = useState<string | null>(null);
@@ -121,26 +142,51 @@ export function ServiceEditor({ initial, existingIds, models, onSave, onCancel }
   const parseProfiles = (): string[] =>
     composeProfilesText.split('\n').map((s) => s.trim()).filter(Boolean);
 
+  const buildHealthCheck = (): HealthCheck | undefined => {
+    switch (healthMode) {
+      case 'default': return undefined;
+      case 'none': return { type: 'none' };
+      case 'tcp': return { type: 'tcp' };
+      case 'http': {
+        const status = parseInt(healthStatus, 10);
+        return {
+          type: 'http',
+          path: healthPath.trim() || undefined,
+          expectStatus: Number.isFinite(status) ? status : undefined,
+          expectBody: healthBody.trim() || undefined,
+        };
+      }
+      case 'openai-models':
+        return { type: 'openai-models', path: healthPath.trim() || undefined, expectAlias: healthAlias.trim() || undefined };
+    }
+  };
+
   const save = () => {
     const p = parseInt(port, 10);
     if (mode === 'command' && !command.trim()) { setError('命令不能为空'); return; }
     if (mode === 'compose' && !composeDir.trim()) { setError('Compose 目录不能为空'); return; }
     if (mode === 'llama' && !model.trim()) { setError('模型路径不能为空'); return; }
     if (p > 0 && (!Number.isInteger(p) || p < 1 || p > 65535)) { setError('端口必须是 1-65535 的整数（或留空）'); return; }
+    if (healthMode === 'http' && healthStatus.trim() && !Number.isFinite(parseInt(healthStatus, 10))) {
+      setError('期望状态码必须是整数'); return;
+    }
     const fallbackName = mode === 'compose' ? basename(composeDir) : mode === 'command' ? basename(command) : basename(model);
-    let id = initial ? '' : slug(label || fallbackName);
-    if (!initial) {
+    // 编辑沿用原 id；新增才生成，并在冲突时追加序号
+    let id = initialId ?? slug(label || fallbackName);
+    if (!initialId) {
       let candidate = id;
       let n = 2;
       while (existingIds.includes(candidate)) candidate = `${id}-${n++}`;
       id = candidate;
     }
-    const llamaArgs = mode === 'llama' ? buildArgs(form) : argsText.split('\n').map((s) => s.trim()).filter(Boolean);
+    const args = mode === 'llama' ? buildArgs(form) : argsText.split('\n').map((s) => s.trim()).filter(Boolean);
     const common = {
       label: label.trim() || fallbackName,
       role: role.trim(),
       port: p,
-      args: llamaArgs,
+      args,
+      kind: mode,
+      healthCheck: buildHealthCheck(),
       autostart,
       enabled,
     };
@@ -186,10 +232,12 @@ export function ServiceEditor({ initial, existingIds, models, onSave, onCancel }
         <div className="form-row">
           <label>启动方式</label>
           <div className="form-row-group">
-            <label className="check-row">
-              <input type="radio" name="mode" checked={mode === 'llama'} onChange={() => setMode('llama')} />
-              llama 模板（GGUF 模型）
-            </label>
+            {llamaConfigured && (
+              <label className="check-row">
+                <input type="radio" name="mode" checked={mode === 'llama'} onChange={() => setMode('llama')} />
+                llama 模板（GGUF 模型）
+              </label>
+            )}
             <label className="check-row">
               <input type="radio" name="mode" checked={mode === 'command'} onChange={() => setMode('command')} />
               自定义命令
@@ -199,6 +247,7 @@ export function ServiceEditor({ initial, existingIds, models, onSave, onCancel }
               Compose 服务（docker compose）
             </label>
           </div>
+          {!llamaConfigured && <span className="hint">未配置 llama-server 路径与扫描根目录，llama 模板不可用（可在设置中配置）</span>}
         </div>
 
         <div className="form-row">
@@ -212,7 +261,7 @@ export function ServiceEditor({ initial, existingIds, models, onSave, onCancel }
           <datalist id="role-options">
             <option value="vlm" /><option value="embedding" /><option value="intent" /><option value="chat" />
           </datalist>
-          <span className="hint">vlm/embedding/intent 为 OpenViking 保留角色，其余自由</span>
+          <span className="hint">自由文本，仅用于分组展示</span>
         </div>
 
         {mode === 'command' ? (
@@ -262,7 +311,6 @@ export function ServiceEditor({ initial, existingIds, models, onSave, onCancel }
               </datalist>
             </div>
 
-            {/* P1-1 可视化参数面板（llama 模板） */}
             <div className="param-grid">
               <div className="form-row">
                 <label title="KV cache 长度，越大越占显存">上下文 ctx-size</label>
@@ -342,12 +390,51 @@ export function ServiceEditor({ initial, existingIds, models, onSave, onCancel }
           </div>
         )}
 
-        {mode !== 'compose' && mode !== 'llama' && (
+        {mode === 'command' && (
           <div className="form-row">
             <label>启动参数（每行一个）</label>
             <textarea className="textarea" rows={5} value={argsText} onChange={(e) => setArgsText(e.target.value)} />
           </div>
         )}
+
+        <div className="form-row">
+          <label title="决定服务卡片显示「就绪中」还是「运行中」">就绪判定</label>
+          <select className="input" value={healthMode} onChange={(e) => setHealthMode(e.target.value as HealthMode)}>
+            <option value="default">默认（llama 用模型列表，其余用端口）</option>
+            <option value="tcp">端口可连接</option>
+            <option value="http">HTTP 状态码 / 响应体</option>
+            <option value="openai-models">OpenAI /v1/models 模型列表</option>
+            <option value="none">不检查</option>
+          </select>
+          {healthMode === 'http' && (
+            <div className="form-row-group">
+              <div className="form-row">
+                <label>路径</label>
+                <input className="input" value={healthPath} onChange={(e) => setHealthPath(e.target.value)} placeholder="/healthz" />
+              </div>
+              <div className="form-row">
+                <label>期望状态码（可选）</label>
+                <input className="input" type="number" value={healthStatus} onChange={(e) => setHealthStatus(e.target.value)} placeholder="默认 2xx/3xx" />
+              </div>
+              <div className="form-row">
+                <label>响应体需包含（可选）</label>
+                <input className="input" value={healthBody} onChange={(e) => setHealthBody(e.target.value)} placeholder="支持 {{alias}} {{model}} {{port}}" />
+              </div>
+            </div>
+          )}
+          {healthMode === 'openai-models' && (
+            <div className="form-row-group">
+              <div className="form-row">
+                <label>路径</label>
+                <input className="input" value={healthPath} onChange={(e) => setHealthPath(e.target.value)} placeholder="/v1/models" />
+              </div>
+              <div className="form-row">
+                <label>期望模型名（可选）</label>
+                <input className="input" value={healthAlias} onChange={(e) => setHealthAlias(e.target.value)} placeholder="默认取 alias，支持 {{alias}}" />
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="form-row-group">
           <label className="check-row"><input type="checkbox" checked={autostart} onChange={(e) => setAutostart(e.target.checked)} />随应用启动</label>
