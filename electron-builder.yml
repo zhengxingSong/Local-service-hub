@@ -1,0 +1,34 @@
+appId: com.local.llama-manager
+productName: LLaMA 模型管理器
+directories:
+  output: release
+  buildResources: resources
+files:
+  - dist/**
+  - package.json
+asar: true
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: resources/icon.ico
+  # 跳过签名与可执行文件图标/版本编辑，避免 winCodeSign 解压符号链接的权限问题
+  signAndEditExecutable: false
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: LLaMA 模型管理器
+  artifactName: ${productName}-Setup-${version}.${ext}
+  deleteAppDataOnUninstall: false
+
+electronDownload:
+  mirror: https://npmmirror.com/mirrors/electron/
+
+# electron-builder 从 npmmirror 拉取 NSIS/winCodeSign 等构建工具
+npmRebuild: false
