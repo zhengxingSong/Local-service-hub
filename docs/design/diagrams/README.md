@@ -1,4 +1,12 @@
-# 交互闭环流程图（12 个闭环，11 张图）
+# 交互闭环流程图（12 张）
+
+> **前提已修订。** 这套图最初建立在「能力集合 + 巡检」的前提上；现行前提见
+> [premise-and-loops.md](../premise-and-loops.md) 与 [concepts.md](../concepts.md)：
+> **「不写代码，用 GUI 把本地的东西拉起来并配好」+「本地资源有限」**。
+> 闭环的动作序列本身仍然有效，但两处定性变了：
+> ① **L1 巡检不再是需要主动执行的高频闭环**，它属于处置态里的异常路径；
+> ② **新增 L2 + L4「预检与资源裁决」**（本目录 `loop-preflight`），它才是启动路径上的核心。
+> 现行图集：12 张对应 10 个闭环（L7 日志导出并入 L6）。
 
 用 archify 生成的可交互 HTML：暗/亮主题、平移缩放、搜索、聚焦节点、按关系追踪、Presentation 模式、导出 PNG/SVG。
 每张图下方三张卡片分别是**闭环判据**、**界面承载**、以及**当前应用缺的能力**——那才是设计依据。
@@ -7,6 +15,7 @@
 
 | 图 | 闭环 | 一句话 |
 |---|---|---|
+| [loop-preflight.workflow.html](loop-preflight.workflow.html) | **L2 + L4** 预检与资源裁决 | 配方需求 vs 资源账本 → 四族条件 → 阻断 + 三条出口 → 释放后重新预检 |
 | [loop-inspect.workflow.html](loop-inspect.workflow.html) | **L1** 巡检 | 唤起窗口 → 顶栏摘要 → 失败行 → 抽屉 → 处置 → 摘要归零 |
 | [loop-group-switch.workflow.html](loop-group-switch.workflow.html) | **L2** 组切换与独占互斥 | 点组启动 → 冲突检测 → 确认模态 → 旧组停净 → 新组就绪 → 组运行中 N/N |
 | [loop-onboard.workflow.html](loop-onboard.workflow.html) | **L3** 新增服务 | 选形态 → 表单 → 保存入列 → 校验预检 → 拉起 → 就绪 |

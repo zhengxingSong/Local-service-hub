@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "闭环 L2 + L4 · 预检与资源裁决",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "check", "label": "检查：四族逐项", "focus": ["goal", "ledger", "gate"], "note": "把配方的需求声明与本机账本对比，按依赖→环境→占用→资源四族逐项给结论，从最便宜可修排到最贵可修。" },
+      { "id": "block", "label": "阻断：指出挡住的那一族", "focus": ["block", "exits"], "note": "不通过时不是一句「启动失败」，而是指出哪一族挡住了，并给出三条可执行出口。" },
+      { "id": "close", "label": "闭环：释放后重新预检", "focus": ["exits", "ledger", "ok"], "note": "释放或降需会改变账本，于是重新预检；判据是配方真的进入启动流程，而不是「命令已发出」。" }
+    ]
+  },
+  "lanes": [
+    { "id": "ui", "label": "决策面" },
+    { "id": "daemon", "label": "主进程" },
+    { "id": "res", "label": "本机资源" }
+  ],
+  "phases": [
+    { "id": "read", "label": "读需求与账本", "fromCol": 0, "toCol": 1 },
+    { "id": "judge", "label": "四族裁决", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "exit", "label": "出口与闭环", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["goal", "gate", "ok"],
+  "nodes": [
+    { "id": "goal", "lane": "ui", "col": 0, "type": "frontend", "label": "要启动的配方", "sublabel": "带需求声明" },
+    { "id": "ledger", "lane": "res", "col": 0, "type": "database", "label": "资源账本", "sublabel": "余量 · 占用者" },
+    { "id": "gate", "lane": "daemon", "col": 0, "type": "backend", "label": "四族条件检查", "sublabel": "四族逐项" },
+    { "id": "ok", "lane": "daemon", "col": 2, "type": "backend", "label": "满足则进入启动" },
+    { "id": "block", "lane": "ui", "col": 2, "type": "frontend", "label": "阻断并指出原因", "sublabel": "哪一族挡住了" },
+    { "id": "exits", "lane": "ui", "col": 4, "type": "frontend", "label": "三条出口", "sublabel": "释放·降需·换目标" },
+    { "id": "force", "lane": "daemon", "col": 5, "type": "backend", "label": "强制启动", "sublabel": "接受降级风险" }
+  ],
+  "edges": [
+    { "from": "goal", "to": "gate", "label": "提交预检", "role": "main", "variant": "emphasis" },
+    { "from": "ledger", "to": "gate", "label": "提供余量", "role": "async", "variant": "dashed" },
+    { "from": "gate", "to": "ok", "label": "四族全过", "role": "main", "variant": "emphasis", "route": "straight" },
+    { "from": "gate", "to": "block", "label": "任一族不过", "role": "branch" },
+    { "from": "block", "to": "exits", "label": "选一条出口", "role": "branch", "variant": "security", "route": "straight" },
+    { "from": "exits", "to": "force", "label": "或执意启动", "role": "branch" },
+    { "from": "exits", "to": "ledger", "label": "释放后重检", "role": "return", "variant": "security", "route": "bottom-channel", "fromSide": "bottom", "toSide": "bottom" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "闭环判据", "items": ["配方真的进入启动流程（不是「命令已发出」）", "阻断时用户拿到一个立刻能做的动作", "释放或降需后重新预检能通过，或给出新的差值"] },
+    { "dot": "cyan", "title": "四族条件，从最便宜可修排到最贵可修", "items": ["依赖：它依赖的配方是否已就绪 —— 先起依赖即可", "环境：runtime / 文件 / 镜像 —— 装或拉即可", "占用：端口冲突 / 互斥组在跑 —— 换端口或停占用者", "资源：显存 · RAM · CPU · 磁盘 —— 释放 / 降需 / 换目标"] },
+    { "dot": "amber", "title": "必须诚实的三件事", "items": ["可信度标注：算出来的 / 读出来的 / 你声明的，不能混在一起显示", "占用者要指名道姓（pid + 进程名 + 服务名），不能只说「端口被占用」", "强制启动是承认预检可能保守的出口，不是反悔按钮"] }
+  ]
+}
