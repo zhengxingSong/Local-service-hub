@@ -15,11 +15,21 @@
    令牌
    ═══════════════════════════════════════════════════════════════════════ */
 :root{
-  /* 台面：搪瓷灰（浅底）。面板靠「刻蚀线」分层，不靠投影。 */
-  --face:#d5d7d2;  --face-2:#e6e8e3; --recess:#c8cbc5; --recess-2:#c0c3bd; --face-hi:#f0f2ed;
-  --ink:#14181a;   --ink-2:#454d50;  --ink-3:#4a5354;  --ink-dim:#535c5a;
-  --rule:#b1b6b1;  --rule-2:#8a908d; --etch-lo:#f3f5f0; --etch-hi:#9fa5a1;
-  --acc:#0a5348;   --acc-2:#0d6b5c;  --acc-weak:#d4e4e0; --acc-ink:#08423a;
+  /* 台面：冷调近白。用「柔和投影 + 低对比发丝线」分层，不再用面板灰与内凹斜面。 */
+  --face:#f6f7f6;  --face-2:#ffffff; --recess:#eef0ef; --recess-2:#e5e9e7; --face-hi:#ffffff;
+  --ink:#15191b;   --ink-2:#3f4749;  --ink-3:#5b6365;  --ink-dim:#6b7375;
+  --rule:#e4e8e5;  --rule-2:#cbd1cd; --etch-lo:#eef1ef; --etch-hi:#e6eae7;
+  /* 组件描边：表单控件没有文字标签承载识别，需 >=3:1；按钮另有标签共同识别，取较轻值 */
+  --line-field:#828a86; --line-btn:#a4aca8;
+  --acc:#0a5348;   --acc-2:#0d6b5c;  --acc-hi:#0f7a68; --acc-weak:#dcebe7; --acc-ink:#08423a;
+  /* 圆角体系：容器 12 / 面板 10 / 控件 7 / 芯片全圆 */
+  --r-xs:5px; --r-sm:7px; --r:10px; --r-lg:12px; --r-xl:16px; --r-pill:999px;
+  /* 柔和投影体系：都带 offset 与模糊，不做零偏移光晕，也不做硬偏移 */
+  --sh-1:0 1px 2px rgba(17,26,24,.05), 0 1px 1px rgba(17,26,24,.04);
+  --sh-2:0 2px 6px rgba(17,26,24,.08), 0 1px 2px rgba(17,26,24,.05);
+  --sh-3:0 10px 30px rgba(17,26,24,.14), 0 2px 8px rgba(17,26,24,.08);
+  --sh-4:0 24px 64px rgba(17,26,24,.22), 0 4px 14px rgba(17,26,24,.10);
+  --sh-in:inset 0 1px 2px rgba(17,26,24,.07);
   --ok:#256c36;    --ok-weak:#d5e6d6;
   --warn:#87540a;  --warn-weak:#f0e1c6;
   --bad:#9c281e;   --bad-weak:#f0d9d6;
@@ -33,17 +43,17 @@
   --f-num:"Cascadia Mono",Consolas,ui-monospace,"Courier New",monospace;
   --f-prose:Cambria,Georgia,"Noto Serif SC",serif;
 
-  /* 字号刻度：13px 根，比值 1.14；产品界面用固定刻度，不做流式 */
-  --t-nano:10px;   /* 刻蚀小标签（上限用法，字距 +.09em） */
-  --t-micro:10.5px;/* 表格头、量程刻度、单位后缀 */
-  --t-meta:11px;   /* 单位行、脚注 */
-  --t-micro2:11.5px;
-  --t-base:12.5px; /* 界面正文 */
-  --t-sm:13px;     /* 强调正文、行标题 */
-  --t-sub:15px;    /* 面板标题 */
-  --t-title:17px;  /* 视图标题 */
-  --t-read:19px;   /* 阅读态：量程主读数 */
-  --t-num:30px;    /* 大读数（每视图至多一个） */
+  /* 字号刻度：比值放宽到 1.2，基准 13；产品界面用固定刻度，不做流式 */
+  --t-nano:10.5px;  /* 刻蚀小标签（上限用法，字距 +.08em） */
+  --t-micro:11px;   /* 表格头、量程刻度、单位后缀 */
+  --t-meta:11.5px;  /* 单位行、脚注 */
+  --t-micro2:12px;
+  --t-base:13px;    /* 界面正文 */
+  --t-sm:13.5px;    /* 强调正文、行标题 */
+  --t-sub:15.5px;   /* 面板标题 */
+  --t-title:18px;   /* 视图标题 */
+  --t-read:20px;    /* 阅读态：量程主读数 */
+  --t-num:32px;     /* 大读数（每视图至多一个） */
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{background:#a9ada8}
@@ -462,6 +472,107 @@ body.spec [data-fn]:hover{box-shadow:inset 0 0 0 1px var(--acc),0 0 0 2px rgba(1
     transition-duration:.01ms!important}
   .scalebar .fill{animation:none}
 }
+/* ═══════════════════════════════════════════════════════════════════════
+   现代精修层（refinement，不改结构与交互，只换美学手法）
+   保留身份：松绿强调 · 方格状态灯 · 量程账本 · 刻线标牌母题。
+   换掉 9x 时代的手法：
+     · 零圆角（全表只有状态灯有 1px 圆角）→ 一套圆角体系
+     · 内凹斜面（inset 0 1px 0 高光 / inset 0 2px 4px 按下）→ 柔和投影
+     · 面板灰 #d5d7d2 + 刻蚀双线 → 冷调近白 + 低对比发丝线
+     · 灰桌面上的灰窗口 #a9ada8 → 深色画布上的圆角浮层
+     · 10px 起的小字与 1.14 的紧刻度 → 11px 起、比值 1.2
+     · 缺失的浏览器表面（滚动条）→ 主题化
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* 1 · 画布与窗口：从「灰桌面 + 灰窗口」改为「深色画布 + 圆角浮层」 */
+html,body{background:#171a1b}
+.win{border-radius:var(--r-xl);border:1px solid rgba(255,255,255,.09);overflow:hidden;
+  box-shadow:0 30px 80px rgba(0,0,0,.45),0 2px 8px rgba(0,0,0,.30)}
+.titlebar{border-bottom:1px solid var(--rule)}
+
+/* 2 · 圆角体系 */
+.panel,.gpanel,.vsum,.emptybox,.readout,.fr,.fam,.railcard{border-radius:var(--r)}
+.modal{border-radius:var(--r-lg)}
+.attr{border-radius:0 var(--r-lg) var(--r-lg) 0}
+.toast{border-radius:var(--r)}
+.btn,.tb,.wbtn,.navtab,.seg,.inp,.sel,.ta,.modechip,.snav{border-radius:var(--r-sm)}
+.tabrail{border-radius:var(--r-sm) var(--r-sm) 0 0;overflow:hidden}
+.chip,.tag,.legend i{border-radius:var(--r-pill)}
+.scalebar,.scalebar .seg-b,.scalebar .fill,.scalebar .free,.readout .big{border-radius:var(--r-xs)}
+.tog{border-radius:var(--r-pill)}
+.tog::after{border-radius:50%}
+.lamp{width:7px;height:7px;border-radius:3px;box-shadow:none}
+
+/* 3 · 表面分层：投影 + 发丝线，取代内凹斜面 */
+.panel,.gpanel,.vsum,.readout,.emptybox,.railcard{box-shadow:var(--sh-1)}
+.modal{box-shadow:var(--sh-4)}
+.attr{box-shadow:var(--sh-3)}
+.toast{box-shadow:var(--sh-3)}
+.hair{box-shadow:none}
+.btn.pri{box-shadow:var(--sh-1)}
+.btn.pri:hover{box-shadow:var(--sh-2)}
+.btn.pri:active,.btn:active,.wbtn:active,.navtab:active,.seg button:active{transform:translateY(1px);box-shadow:var(--sh-in)}
+
+/* 4 · 分隔线：低对比但要看得见（原来用刻蚀高光，白底上会整条消失） */
+.tbl th{border-bottom:1px solid var(--rule-2);color:var(--ink-3);font-size:var(--t-micro);letter-spacing:.06em;padding:8px 10px}
+.tbl td{border-bottom:1px solid var(--rule);padding:8px 10px}
+.tbl tr:last-child td{border-bottom:0}
+.tbl tr:hover td{background:var(--face-hi)}
+.member,.mrow{border-top-color:var(--rule)}
+.pb{border-top-color:var(--rule)}
+.scroll .tbl th:first-child,.scroll .tbl td:first-child{padding-left:12px}
+
+/* 5 · 输入与分段控件：描边承担识别职责，故取 3.3:1 */
+.inp,.sel,.ta{background:var(--face-hi);border:1px solid var(--line-field);padding:6px 9px;min-height:30px}
+.inp::placeholder,.ta::placeholder{color:var(--ink-dim)}
+.inp:hover,.sel:hover{border-color:var(--ink-2)}
+.inp:focus,.sel:focus,.ta:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-weak)}
+.seg{background:var(--recess);border-color:var(--line-field)}
+.seg button[aria-pressed="true"]{background:var(--face-2);box-shadow:var(--sh-1)}
+.tog{border-color:var(--line-field)}
+
+/* 6 · 按钮与悬停反馈：按钮由文字标签 + 边界共同识别，边界取较轻值，悬停加深 */
+.btn{background:var(--face-hi);border-color:var(--line-btn)}
+.btn:hover{background:var(--face-2);border-color:var(--line-field);box-shadow:var(--sh-1)}
+.btn.gh{border-color:transparent;background:transparent}
+.btn.gh:hover{background:var(--recess);box-shadow:none}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#f2f7f5}
+.btn.pri:hover{background:var(--acc-hi);border-color:var(--acc-hi)}
+.tb:hover{background:var(--face-2);border-color:var(--rule-2)}
+.tb[aria-pressed="true"]{background:var(--acc);border-color:var(--acc)}
+.wbtn:hover{background:var(--recess)}
+.navtab[aria-pressed="true"]{box-shadow:inset 0 -2px 0 var(--acc)}
+.snav:hover{background:var(--recess)}
+.snav[aria-current="true"]{background:var(--acc-weak);color:var(--acc-ink)}
+
+/* 7 · 状态芯片：淡底、去重边 */
+.chip{border-color:transparent;background:var(--recess);color:var(--ink-2)}
+.chip.ok{background:var(--ok-weak);color:var(--ok)}
+.chip.warn{background:var(--warn-weak);color:var(--warn)}
+.chip.bad{background:var(--bad-weak);color:var(--bad)}
+.chip.info{background:var(--info-weak);color:var(--info)}
+.chip.acc{background:var(--acc-weak);color:var(--acc-ink)}
+
+/* 8 · 交互过渡统一到一条缓动 */
+.btn,.tb,.wbtn,.navtab,.tabrail .tab,.chip,.snav,.inp,.sel,.tog,.member,.mrow,.railcard,.vsum .it{
+  transition:background-color .16s cubic-bezier(.2,.7,.2,1),border-color .16s cubic-bezier(.2,.7,.2,1),
+             box-shadow .16s cubic-bezier(.2,.7,.2,1),color .16s cubic-bezier(.2,.7,.2,1),transform .16s cubic-bezier(.2,.7,.2,1)}
+
+/* 9 · 浏览器表面：焦点环、滚动条、选区、遮罩 —— 最容易被忽略的一层 */
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+*{scrollbar-width:thin;scrollbar-color:var(--rule-2) transparent}
+::-webkit-scrollbar{width:11px;height:11px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--rule-2);border-radius:999px;border:3px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:var(--ink-dim);background-clip:content-box}
+.scrim.on{backdrop-filter:blur(2px)}
+
+/* 10 · 标题标牌：保留刻线母题，去掉过紧字距 */
+.ph,.panel>h3{letter-spacing:0}
+body.spec [data-fn]{border-radius:var(--r-xs)}
+body.spec [data-fn]:hover{box-shadow:inset 0 0 0 1px var(--acc),0 0 0 3px var(--acc-weak)}
+[data-fn].pin,[data-fn].rel{border-radius:var(--r-xs)}
+
 </style>
 </head>
 <body>

@@ -50,8 +50,9 @@
     <button class="tab on" data-i="0"><i class="sw" style="background:#0d0f12"></i>现任（石墨 + 电光蓝）</button>
     <button class="tab" data-i="1"><i class="sw" style="background:#f4f1ec"></i>V1 · design-taste-frontend</button>
     <button class="tab" data-i="2"><i class="sw" style="background:#e1eaec"></i>V2 · hallmark</button>
-    <button class="tab" data-i="3"><i class="sw" style="background:#d5d7d2"></i>V3 · impeccable</button>
+    <button class="tab" data-i="3"><i class="sw" style="background:#f6f7f6"></i>V3 · impeccable（已精修）</button>
     <button class="tab" data-i="4"><i class="sw" style="background:#8892a0"></i>并排快照</button>
+    <button class="tab" data-i="5"><i class="sw" style="background:linear-gradient(90deg,#d5d7d2 50%,#171a1b 50%)"></i>V3 精修前后</button>
   </div>
   <span class="spacer"></span>
   <button class="btn" id="fit">适宽</button>
@@ -70,13 +71,19 @@
       <figure><img src="shots/0-current.png" alt="现任" loading="lazy"><figcaption><b>现任</b><span>石墨底 + 电光蓝 · 圆角卡片 · 画窗口外框</span></figcaption></figure>
       <figure><img src="shots/1-taste.png" alt="V1" loading="lazy"><figcaption><b>V1 · design-taste-frontend</b><span>暖石纸面 + 赭褐 · 单一 2px 圆角 · 零投影</span></figcaption></figure>
       <figure><img src="shots/2-hallmark.png" alt="V2" loading="lazy"><figcaption><b>V2 · hallmark</b><span>瓷白 + 墨青 · 全 OKLCH 令牌 · 不画窗口外框</span></figcaption></figure>
-      <figure><img src="shots/3-impeccable.png" alt="V3" loading="lazy"><figcaption><b>V3 · impeccable</b><span>搪瓷灰 + 松绿 · 1px 圆角 · 刻蚀线分层</span></figcaption></figure>
+      <figure><img src="shots/3-impeccable.png" alt="V3" loading="lazy"><figcaption><b>V3 · impeccable（已精修）</b><span>近白台面 + 松绿 · 圆角体系 7/10/16 · 柔和投影 · 深色画布</span></figcaption></figure>
+    </div>
+  </div>
+  <div class="pane" data-pane="5">
+    <div class="grid">
+      <figure><img src="shots/3-impeccable-before.png" alt="精修前" loading="lazy"><figcaption><b>改之前</b><span>搪瓷灰 #d5d7d2 台面 · 页面底色 #a9ada8（灰桌面放灰窗口）· 全表零圆角 · 刻蚀双线 · 10px 起小字</span></figcaption></figure>
+      <figure><img src="shots/3-impeccable.png" alt="精修后" loading="lazy"><figcaption><b>改之后</b><span>近白 #f6f7f6 台面 · 深色画布 #171a1b · 圆角 7/10/16 · 柔和投影 · 基准 13px · 滚动条与焦点环主题化</span></figcaption></figure>
     </div>
   </div>
 </main>
 
 <div class="hint">
-  <kbd>1</kbd>–<kbd>5</kbd> 切换 · <kbd>←</kbd><kbd>→</kbd> 前后一版 · <kbd>0</kbd> 切适宽 / 1:1 ·
+  <kbd>1</kbd>–<kbd>6</kbd> 切换 · <kbd>←</kbd><kbd>→</kbd> 前后一版 · <kbd>0</kbd> 切适宽 / 1:1 ·
   五份文件都在本目录，全部单文件离线，双击也能直接看。并排快照是静态 PNG（由无头 Chrome 渲染）。
 </div>
 
@@ -86,8 +93,9 @@
     { file:'ui-preview.html',      name:'现任（石墨 + 电光蓝）',  note:'1120×780 窗口外框 · 圆角卡片 · 投影 6 处 · 16 进制令牌' },
     { file:'ui-v1-taste.html',     name:'V1 · design-taste-frontend', note:'暖石纸面 + 赭褐 · 圆角只有 0/1/2px · 零 box-shadow · 密度 9 · 88 个标注控件' },
     { file:'ui-v2-hallmark.html',  name:'V2 · hallmark',          note:'瓷白纸 + 墨青 · 全部 OKLCH 命名令牌 · 不画假窗口外框（hallmark gate 47）· Cambria 正体显示字' },
-    { file:'ui-v3-impeccable.html',name:'V3 · impeccable',        note:'搪瓷灰 + 松绿 · 圆角仅 1px · 刻蚀线分层 · ::selection 已主题化 · 量程账本签名件' },
-    { file:null,                   name:'并排快照',                note:'四版首屏静态 PNG 对照（1520×1010，无头 Chrome 渲染）' }
+    { file:'ui-v3-impeccable.html',name:'V3 · impeccable（已精修）', note:'近白台面 + 松绿 · 圆角体系 7/10/16 · 柔和投影 · 深色画布 · 量程账本签名件保留' },
+    { file:null,                   name:'并排快照',                note:'四版首屏静态 PNG 对照（1520×1010，无头 Chrome 渲染）' },
+    { file:null,                   name:'V3 精修前后',             note:'同一版的两次外观：灰桌面+灰面板+零圆角 → 深色画布+近白台面+圆角体系+柔和投影' }
   ];
   var tabs = [].slice.call(document.querySelectorAll('.tab'));
   var panes = [].slice.call(document.querySelectorAll('.pane'));
@@ -125,7 +133,7 @@
   real.addEventListener('click', function(){ fitMode = false; real.classList.add('on'); fit.classList.remove('on'); applyScale(); });
   window.addEventListener('resize', applyScale);
   document.addEventListener('keydown', function(e){
-    if (e.key >= '1' && e.key <= '5'){ show(+e.key - 1); return; }
+    if (e.key >= '1' && e.key <= '6'){ show(+e.key - 1); return; }
     if (e.key === 'ArrowRight'){ show((current + 1) % DATA.length); return; }
     if (e.key === 'ArrowLeft'){ show((current + DATA.length - 1) % DATA.length); return; }
     if (e.key === '0'){ fitMode = !fitMode; fit.classList.toggle('on', fitMode); real.classList.toggle('on', !fitMode); applyScale(); }
