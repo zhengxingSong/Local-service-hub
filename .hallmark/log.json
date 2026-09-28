@@ -1,0 +1,11 @@
+[
+  {
+    "date": "2026-09-29",
+    "macrostructure": "none (app surface — 页面级 macrostructure 不适用；形状取自 ui-layout.md 的 S / P1 / P2 / P2.1 / P3)",
+    "theme": "custom",
+    "theme_axes": "light / roman-serif / chromatic-other (ink-teal ~205)",
+    "vibe": "冷静仪表盘：瓷白纸、墨青、零装饰",
+    "enrichment": "none",
+    "brief": "服务中枢 · 高精度静态可交互预览 v2（Hallmark 驱动视觉层，替换现任的石墨底 + 蓝强调 + 假窗口外框）"
+  }
+]

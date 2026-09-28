@@ -1035,17 +1035,26 @@ function setScenario(sc){
    交互绑定
    ===================================================================== */
 function bindAll(){
-  $$('[data-go]').forEach(b=>{ if(b.dataset.bound) return; b.dataset.bound='1'; b.addEventListener('click',()=>go(b.dataset.go)); });
-  $$('[data-modal]').forEach(b=>{ if(b.dataset.bound) return; b.dataset.bound='1'; b.addEventListener('click',()=>openModal(b.dataset.modal)); });
-  $$('[data-modal-close]').forEach(b=>{ if(b.dataset.bound) return; b.dataset.bound='1'; b.addEventListener('click',()=>closeModals()); });
-  $$('[data-close]').forEach(b=>{ if(b.dataset.bound) return; b.dataset.bound='1'; b.addEventListener('click',()=>closeModals()); });
-  $$('[data-toast]').forEach(b=>{ if(b.dataset.bound) return; b.dataset.bound='1'; b.addEventListener('click',()=>{ const [k,t]=b.dataset.toast.split('|'); toast(k,t); }); });
-  $$('[data-drawer]').forEach(b=>{ if(b.dataset.bound) return; b.dataset.bound='1'; b.addEventListener('click',()=>openDrawer(b.dataset.drawer)); });
-  $$('.sw').forEach(b=>{ if(b.dataset.bound) return; b.dataset.bound='1'; b.addEventListener('click',()=>b.classList.toggle('on')); });
-  $$('[data-act]').forEach(b=>{
-    if(b.dataset.bound) return; b.dataset.bound='1';
-    b.addEventListener('click',()=>{ if(b.dataset.act==='enable-chat') openModal('m-pre'); else toast('ok','已启用 · 按序拉起并等待就绪'); });
-  });
+  /* 事件委托：一个控件可以同时带多个 data-* 行为，必须逐个执行。
+     早先每个属性各绑一次、并用 dataset.bound 做幂等，结果是带
+     data-close + data-go + data-toast 的按钮只有第一个行为生效
+     （例如探测模态的「用这个形态继续」只跳页、关不掉模态）。 */
+  if(!bindAll.delegated){
+    bindAll.delegated = true;
+    document.addEventListener('click',(e)=>{
+      const t = e.target.closest('[data-go],[data-modal],[data-modal-close],[data-close],[data-toast],[data-drawer],[data-act],.sw');
+      if(!t) return;
+      if(t.dataset.act==='release') return;              /* 由下方处理器负责（还要切场景） */
+      if(t.dataset.act==='enable-chat'){ openModal('m-pre'); return; }
+      if(t.dataset.act){ toast('ok','已启用 · 按序拉起并等待就绪'); return; }
+      if(t.dataset.go) go(t.dataset.go);
+      if(t.dataset.modal) openModal(t.dataset.modal);
+      if(t.dataset.drawer) openDrawer(t.dataset.drawer);
+      if(t.classList.contains('sw')) t.classList.toggle('on');
+      if(t.hasAttribute('data-toast')){ const [k,msg]=t.dataset.toast.split('|'); toast(k,msg); }
+      if(t.hasAttribute('data-close') || t.hasAttribute('data-modal-close')) closeModals();
+    });
+  }
   bindSpec();
 }
 /* 预检里的「停掉它」→ 切到切换演示 */
@@ -1060,12 +1069,15 @@ $('#btnNotice').addEventListener('click',()=>{ $('#notice').dataset.force='1'; $
 
 /* 标注层 */
 let pinned = null;
-function find(id){ return document.getElementById(id) || document.querySelector(`[data-id="${id}"]`); }
+function find(id){ return document.getElementById(id) || document.querySelector(`[data-id="${id}"]`) || document.querySelector(`[data-target="${id}"]`); }
 function bindSpec(){
   $$('[data-fn]').forEach(el=>{
     if(el.dataset.sb) return; el.dataset.sb='1';
     el.addEventListener('mouseenter',()=>{ if(!pinned) showSpec(el); });
     el.addEventListener('mouseleave',()=>{ if(!pinned) resetSpec(); });
+    el.addEventListener('focus',()=>{ if(!pinned) showSpec(el); });
+    /* 没有 blur 复位时，焦点离开后面板会留着上一个控件的说明，读起来像当前控件的属性 */
+    el.addEventListener('blur',()=>{ if(!pinned) resetSpec(); });
     el.addEventListener('click',(e)=>{
       if(!document.body.classList.contains('spec')) return;
       e.preventDefault(); e.stopPropagation();

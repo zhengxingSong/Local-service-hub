@@ -12,9 +12,11 @@
  * display: Cambria (roman) · body: "Segoe UI Variable Text" · outlier: "Cascadia Mono"
  * axes: light / roman-serif / chromatic-other (ink-teal ~205°)
  * studied: no · context: inferred (用户选择 go-ahead 路径) · genre: modern-minimal
- * contrast: pass (40–41, 逐对计算) · honest: pass (46) · chrome: pass (47) · tokens: pass (48)
- * responsive: pass (49) · icons: pass (30) · nav/footer/hero: n/a (app surface) · mobile: pass (34, 49, 50–57)
- * slop: 54 / 58 — 开放项 17、38、39、44（详见交付报告）
+ * contrast: pass (40–41：69 对逐对计算，0 失败) · honest: pass (46) · chrome: pass (47) · tokens: pass (48)
+ * responsive: pass (49) · icons: pass (30, 33) · nav/footer/hero: n/a (app surface → 42–45 不适用) · mobile: pass (34, 49–57)
+ * states: 8/8 (default · hover · focus-visible · active · disabled · loading · error · success)；另有 .is-hover/.is-focus/.is-active 强制态供陈列
+ * slop: 56 / 58 —— 开放项 16（成功 Toast 与技能「静默成功」冲突，但 ui-layout.md 的 T1 明确要求承载所有动作结果）
+ *                      与 38（等宽字体的「槽位」计数口径：按角色算 1 个，按出现位置算远超 2 处）；详见交付报告
  */
 /* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V4 */
 
@@ -207,7 +209,7 @@ svg.i\:sm{ width:14px; height:14px; }
 .tool:focus-visible{ outline: 2px solid var(--color-focus); outline-offset: 2px; }
 .tool[aria-pressed="true"]{ background: var(--color-paper); color: var(--color-accent); box-shadow: inset 0 0 0 1px var(--color-accent-line); }
 .tool:disabled{ opacity: .5; cursor: not-allowed; }
-.shell-note{ font-size: var(--text-xs); color: var(--color-ink-2); line-height: var(--lh-tight); }
+.shell-note{ font-size: var(--text-xs); color: var(--color-ink-2); line-height: var(--lh-tight); max-width: var(--measure); }
 .shell-note b{ color: var(--color-ink); }
 
 /* ============================================================================
@@ -387,6 +389,7 @@ svg.i\:sm{ width:14px; height:14px; }
 .ui-chip--btn:hover{ background: var(--color-paper-2); border-color: var(--color-ink-2); color: var(--color-ink); }
 .ui-chip--btn:focus-visible{ outline: 2px solid var(--color-focus); outline-offset: 2px; }
 .ui-chip--btn:active{ background: var(--color-paper-3); }
+.ui-chip--btn:disabled{ opacity:.5; cursor:not-allowed; }
 
 .tag{
   display:inline-flex; align-items:center; gap: var(--space-2xs);
@@ -403,6 +406,8 @@ svg.i\:sm{ width:14px; height:14px; }
 
 .micro{ font-size: var(--text-2xs); letter-spacing: var(--plate-tracking); text-transform: uppercase; color: var(--color-muted); line-height: var(--lh-tight); }
 .hint{ font-size: var(--text-xs); color: var(--color-ink-2); line-height: var(--lh-tight); }
+/* 帮助/错误槽位恒占一行高度：错误替换帮助时不会把页面往下推 */
+.field__help{ min-height: 1lh; }
 .meta{ font-size: var(--text-xs); color: var(--color-muted); line-height: var(--lh-tight); }
 kbd{
   font-family: var(--font-mono); font-size: var(--text-2xs);
@@ -498,18 +503,24 @@ kbd{
 .view--config.is-on{ display:flex; flex-direction:column; min-height:0; }
 .tabs{ flex:none; display:flex; align-items:stretch; gap: var(--space-xs); padding-inline: var(--space-md); background: var(--color-paper-2); border-bottom: 1px solid var(--color-rule); }
 .ui-tab{
+  position: relative;
   border:0; background:transparent; color: var(--color-ink-2);
   font-size: var(--text-base); line-height:1; white-space:nowrap; cursor:pointer;
   padding: var(--space-sm) var(--space-xs);
-  border-bottom: 2px solid transparent; margin-bottom: -1px;
-  transition: color var(--dur-micro) var(--ease-out), border-color var(--dur-micro) var(--ease-out), background-color var(--dur-micro) var(--ease-out);
+  transition: color var(--dur-micro) var(--ease-out), background-color var(--dur-micro) var(--ease-out);
+}
+.ui-tab::after{
+  content:""; position:absolute; left:0; right:0; bottom:0; height:2px;
+  background: transparent;
+  transition: background-color var(--dur-micro) var(--ease-out);
 }
 .ui-tab:hover{ color: var(--color-ink); background: var(--color-paper-3); }
 .ui-tab.is-hover{ color: var(--color-ink); background: var(--color-paper-3); }
 .ui-tab:focus-visible{ outline: 2px solid var(--color-focus); outline-offset: -2px; }
 .ui-tab.is-focus{ outline: 2px solid var(--color-focus); outline-offset: -2px; }
 .ui-tab:active{ background: var(--color-paper-3); }
-.ui-tab[aria-selected="true"]{ color: var(--color-accent); border-bottom-color: var(--color-accent); font-weight:600; }
+.ui-tab[aria-selected="true"]{ color: var(--color-accent); font-weight:600; }
+.ui-tab[aria-selected="true"]::after{ background: var(--color-accent); }
 .ui-tab:disabled{ opacity:.5; cursor:not-allowed; }
 .ui-tab[data-state="loading"]{ color: var(--color-muted); cursor: progress; }
 .panel{ display:none; flex:1; min-height:0; flex-direction:column; }
@@ -594,9 +605,14 @@ kbd{
   display:flex; flex-direction:column;
   background: var(--color-paper); border-left: 1px solid var(--color-rule-3);
   transform: translateX(100%); opacity: 0;
+  /* 退出：加速离开，时长取进入的 75%（缓动写在基准态＝退出态） */
+  transition: transform calc(var(--dur-long) * 0.75) var(--ease-in), opacity calc(var(--dur-long) * 0.75) var(--ease-in);
+}
+.drawer.is-on{
+  transform: none; opacity: 1;
+  /* 进入：减速落位 */
   transition: transform var(--dur-long) var(--ease-out), opacity var(--dur-long) var(--ease-out);
 }
-.drawer.is-on{ transform: none; opacity: 1; }
 .drawer__head{ flex:none; display:flex; align-items:center; gap: var(--space-xs); padding: var(--space-sm) var(--space-md); border-bottom:1px solid var(--color-rule); background: var(--color-paper-2); }
 .drawer__name{ font-family: var(--font-display); font-size: var(--text-md); line-height:1; }
 .drawer__body{ flex:1; min-height:0; overflow:auto; padding: var(--space-md); display:flex; flex-direction:column; gap: var(--space-md); }
@@ -624,9 +640,13 @@ kbd{
   background: var(--color-paper); border:1px solid var(--color-rule-3); border-radius: var(--radius-3);
   box-shadow: var(--shadow-overlay);
   opacity: 0; transform: scale(.98);
+  /* 退出：加速离开，时长取进入的 75% */
+  transition: opacity calc(var(--dur-long) * 0.75) var(--ease-in), transform calc(var(--dur-long) * 0.75) var(--ease-in);
+}
+.modalwrap.is-on .modal{
+  opacity:1; transform:none;
   transition: opacity var(--dur-long) var(--ease-out), transform var(--dur-long) var(--ease-out);
 }
-.modalwrap.is-on .modal{ opacity:1; transform:none; }
 .modal--460{ width: 460px; }
 .modal--520{ width: 520px; }
 .modal__head{ flex:none; display:flex; align-items:center; gap: var(--space-xs); padding: var(--space-sm) var(--space-md); border-bottom:1px solid var(--color-rule); background: var(--color-paper-2); border-radius: var(--radius-3) var(--radius-3) 0 0; }
@@ -722,15 +742,17 @@ body.spec [data-fn].is-pin{ outline: 2px solid var(--color-accent); background: 
     transition-duration: 150ms !important;
   }
   .toast{ animation-name: toast-fade; }
-  .drawer{ transform: none !important; }
-  .modal{ transform: none !important; }
+  /* 抽屉/模态的位移是「状态」而不是「动画」，所以不能把 transform 抹掉（抹掉会让关闭的抽屉停在屏幕里）；
+     正确做法是让位移 0ms 瞬间完成，只保留 ≤150ms 的透明度交叉淡入。 */
+  .drawer, .drawer.is-on, .modal, .modalwrap.is-on .modal{
+    transition: opacity 150ms linear, transform 0ms linear;
+  }
   .spinner{ animation: spin 1400ms linear infinite !important; animation-iteration-count: infinite !important; }
   @keyframes toast-fade{ from{ opacity:0; } to{ opacity:1; } }
 }
 </style>
 </head>
 <body>
-<pre id="probeout"></pre>
 
 <!-- ============ 图标（自建单一线条集，1.6 描边 / 24 网格；全部 aria-hidden） ============ -->
 <svg style="display:none" aria-hidden="true" focusable="false">
@@ -957,7 +979,7 @@ body.spec [data-fn].is-pin{ outline: 2px solid var(--color-accent); background: 
                       <input class="ui-inp ui-inp--mono" style="width:88px" value="600" aria-label="准备超时秒数" data-fn="准备超时（秒）。超时不会改变运行状态（此时还没启动），只改变「已准备」这个状态位。" data-cond="形态匹配">
                       <span class="hint">秒</span>
                       <span class="sp"></span>
-                      <button class="ui-btn ui-btn--sm" type="button" data-toast="ok|准备完成 · 依赖已就位" data-fn="立即准备：执行准备命令并显示进度，可取消。失败不会改变运行状态，只改变「已准备」这个状态位。" data-cond="形态匹配" data-rel="panel-asset">立即准备</button>
+                      <button class="ui-btn" type="button" data-toast="ok|准备完成 · 依赖已就位" data-fn="立即准备：执行准备命令并显示进度，可取消。失败不会改变运行状态，只改变「已准备」这个状态位。" data-cond="形态匹配" data-rel="panel-asset">立即准备</button>
                     </div>
                     <p class="hint">这是「源代码部署」真正落地的地方——没有它，装依赖、建虚拟环境都得你在应用外自己做，那就不叫部署。</p>
                   </div>
@@ -1032,7 +1054,7 @@ body.spec [data-fn].is-pin{ outline: 2px solid var(--color-accent); background: 
                     <div class="field field--stack">
                       <label class="field__label" for="inp-bad">模型路径</label>
                       <input class="ui-inp ui-inp--mono" id="inp-bad" aria-invalid="true" aria-describedby="inp-bad-err" value="D:\\LLM Model\\llama.cpp\\models\\Qwen3-Reranker-0.6B-Q4_K_M.gguf" data-fn="这条真实数据里含重复分隔符（D:\\LLM Model\\…）。Windows 能解析，但属于手改配置留下的痕迹——清单与表单都要能暴露定义本身的问题，而不是只在启动失败时才告诉你。" data-cond="恒可用">
-                      <p class="hint" id="inp-bad-err" role="alert">路径含重复分隔符：<span class="mono">\\</span> 出现两次。<b>改法</b>：删掉多余的 <span class="mono">\</span>，或点「规范化路径」。</p>
+                      <p class="hint field__help" id="inp-bad-err" role="alert">路径含重复分隔符：<span class="mono">\\</span> 出现两次。<b>改法</b>：删掉多余的 <span class="mono">\</span>，或点「规范化路径」。</p>
                     </div>
                     <div class="field">
                       <span class="field__label">日志目录</span>
@@ -1852,12 +1874,29 @@ function idlePanel(){
     ${stateStrip()}`;
 }
 function bindSpec(){
+  /* 悬停 800ms 后揭示（扫过多行控件时不闪），聚焦 0ms（键盘用户是特意走到这里的） */
+  const HOVER_DELAY = 800;
   $$('[data-fn]').forEach(el => {
     if (el.dataset.sb) return;
     el.dataset.sb = '1';
-    el.addEventListener('mouseenter', () => { if (!pinned) showSpec(el); });
-    el.addEventListener('mouseleave', () => { if (!pinned) resetSpec(); });
-    el.addEventListener('focus', () => { if (!pinned) showSpec(el); });
+    el.addEventListener('mouseenter', () => {
+      if (pinned) return;
+      clearTimeout(el.__specTimer);
+      el.__specTimer = setTimeout(() => showSpec(el), HOVER_DELAY);
+    });
+    el.addEventListener('mouseleave', () => {
+      clearTimeout(el.__specTimer);
+      if (!pinned) resetSpec();
+    });
+    el.addEventListener('focus', () => {
+      clearTimeout(el.__specTimer);
+      if (!pinned) showSpec(el);
+    });
+    el.addEventListener('blur', () => {
+      clearTimeout(el.__specTimer);
+      /* 焦点离开必须复位：否则面板会留着上一个控件的说明，读起来像当前控件的属性 */
+      if (!pinned) resetSpec();
+    });
     el.addEventListener('click', (e) => {
       if (!document.body.classList.contains('spec')) return;
       e.preventDefault(); e.stopPropagation();
@@ -1901,7 +1940,8 @@ $('#btnSpec').addEventListener('click', () => {
   const on = document.body.classList.toggle('spec');
   $('#btnSpec').setAttribute('aria-pressed', String(on));
   $('#btnSpec').textContent = on ? '退出标注' : '标注模式';
-  if (!on){ if (pinned){ pinned.classList.remove('is-pin'); pinned = null; } resetSpec(); }
+  if (pinned){ pinned.classList.remove('is-pin'); pinned = null; }
+  resetSpec();
 });
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;

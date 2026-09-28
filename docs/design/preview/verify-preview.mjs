@@ -157,6 +157,22 @@ window.addEventListener('load', function () { setTimeout(function () {
     mark('模态·' + name, visibleModals() > before, '可见浮层 ' + before + ' → ' + visibleModals());
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   });
+  /* 多行为控件的回归检查：探测模态的主按钮同时带 data-close + data-go + data-toast，
+     三者必须都生效。单标志幂等（dataset.bound）会让后两个被静默跳过。 */
+  var detectBtn = all('button,[role=button]').filter(function (b) { return b.textContent.trim() === '探测' && vis(b); })[0];
+  if (detectBtn) {
+    detectBtn.click();
+    var goBtn = all('button,[role=button]').filter(function (b) {
+      return /用这个形态继续|继续|确定/.test(b.textContent) && vis(b);
+    })[0];
+    if (goBtn) {
+      goBtn.click();
+      mark('多行为控件·关闭+跳页+提示三者都生效',
+        visibleModals() === 0 && has('① 形态'),
+        '可见浮层=' + visibleModals() + ' 已到服务编辑=' + has('① 形态'));
+    } else { out.push('MISS | 探测模态里找不到主按钮'); }
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  }
   var stillOpen = all('[class*=modal],[class*=Modal]').filter(function (e) { return vis(e) && /modal/i.test(e.className) && e.getBoundingClientRect().width > 200; }).length;
   mark('模态·全部可关闭', stillOpen <= 1, stillOpen + ' 个仍可见');
 
@@ -205,9 +221,11 @@ window.addEventListener('load', function () { setTimeout(function () {
 }, 120); });
 </script>`;
 
-/* 探针副本写到系统临时目录，避免污染仓库 */
+/* 探针副本写到系统临时目录，避免污染仓库。
+   注意注入必须用**函数**替换：JS 的 String.replace(str, replacement) 会解释替换串里的
+   $$ / $& / $` / $'，把探针里的辅助函数静默改写掉。 */
 import { basename, join } from 'node:path';
 import { tmpdir } from 'node:os';
 const out = join(tmpdir(), basename(file).replace(/\.html$/, '') + '.probe.html');
-writeFileSync(out, html.replace('</body>', probe + '\n</body>'), 'utf8');
+writeFileSync(out, html.replace('</body>', () => probe + '\n</body>'), 'utf8');
 console.log('PROBE_FILE=' + out);
