@@ -806,7 +806,7 @@ function renderCards(){
           <div class="card-line1">
             <span class="dot ${c.dot}"></span>
             <span class="card-name" data-fn="用途卡：一张卡 = 一个用途（一个预设组）。卡上只放决策所需的东西——可用性、成员就绪进度、异常原因；不堆字段。单成员用途就是单成员卡，所以运行态不需要第二套模型。" data-cond="恒显示">${c.name}</span>
-            <span class="badge ${c.dot==='ok'?'ok':c.dot==='warn'?'warn':c.dot==='busy'?'info':'plain'}" data-fn="可用性徽标：由成员的 n/m 与失败数推导。部分可用必须可见——否则你只看到「没起来」，却不知道已有三件在跑、占着资源。" data-cond="恒显示" data-rel="exp-${c.id}">${c.state}</span>
+            <span class="badge ${c.dot==='ok'?'ok':c.dot==='warn'?'warn':c.dot==='busy'?'info':'plain'}" data-fn="可用性徽标：由成员的 n/m 与失败数推导。部分可用必须可见——否则你只看到「没起来」，却不知道已有三件在跑、占着资源。" data-cond="恒显示" ${c.members?`data-rel="exp-${c.id}"`:''}>${c.state}</span>
             ${excl}
           </div>
           <div class="card-meta"><span>${c.sub}</span></div>

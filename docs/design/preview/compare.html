@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>服务中枢 · 四版设计对照查看器</title>
+<style>
+  :root{
+    --bg:#0b0d10; --bar:#14171c; --panel:#191d23; --line:#2a313a; --line2:#3b444f;
+    --text:#e7eaef; --dim:#98a2b3; --dim2:#6b7684; --accent:#4c9aff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--text);font:13px/1.45 "Segoe UI","Microsoft YaHei",system-ui,sans-serif;display:flex;flex-direction:column}
+
+  header{flex:none;background:var(--bar);border-bottom:1px solid var(--line);padding:9px 14px;display:flex;flex-wrap:wrap;gap:9px;align-items:center}
+  .title{font-size:13.5px;font-weight:600;margin-right:4px}
+  .tabs{display:flex;gap:3px;background:#101317;border:1px solid var(--line);border-radius:6px;padding:3px}
+  .tab{border:0;background:transparent;color:var(--dim);font:inherit;font-size:12px;padding:5px 12px;border-radius:4px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:7px}
+  .tab:hover{background:#1c2128;color:var(--text)}
+  .tab.on{background:var(--accent);color:#04121f;font-weight:600}
+  .sw{width:11px;height:11px;border-radius:3px;border:1px solid rgba(255,255,255,.25);flex:none}
+  .spacer{flex:1}
+  .btn{border:1px solid var(--line2);background:#191d23;color:var(--text);font:inherit;font-size:12px;padding:5px 11px;border-radius:4px;cursor:pointer}
+  .btn:hover{border-color:var(--accent)}
+  .btn.on{border-color:var(--accent);color:var(--accent)}
+  .meta{font-size:11.5px;color:var(--dim2);width:100%}
+  .meta b{color:var(--dim);font-weight:600}
+
+  main{flex:1;min-height:0;position:relative;overflow:hidden}
+  .pane{display:none;position:absolute;inset:0;overflow:auto;padding:14px}
+  .pane.on{display:block}
+  .frame-wrap{transform-origin:top left}
+  iframe{width:1520px;height:1010px;border:1px solid var(--line2);border-radius:8px;background:#000;display:block}
+
+  .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-content:start}
+  figure{background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden;display:flex;flex-direction:column}
+  figure img{width:100%;display:block;background:#000}
+  figcaption{padding:8px 11px;display:flex;align-items:baseline;gap:9px;border-top:1px solid var(--line)}
+  figcaption b{font-size:12.5px}
+  figcaption span{font-size:11.5px;color:var(--dim2)}
+  .hint{padding:11px 14px;font-size:12px;color:var(--dim2);border-top:1px solid var(--line);flex:none;background:var(--bar)}
+  kbd{font-family:"Cascadia Mono",Consolas,monospace;font-size:11px;border:1px solid var(--line2);border-bottom-width:2px;border-radius:3px;padding:0 5px;color:var(--text)}
+</style>
+</head>
+<body>
+<header>
+  <span class="title">服务中枢 · 四版设计对照</span>
+  <div class="tabs" id="tabs">
+    <button class="tab on" data-i="0"><i class="sw" style="background:#0d0f12"></i>现任（石墨 + 电光蓝）</button>
+    <button class="tab" data-i="1"><i class="sw" style="background:#f4f1ec"></i>V1 · design-taste-frontend</button>
+    <button class="tab" data-i="2"><i class="sw" style="background:#e1eaec"></i>V2 · hallmark</button>
+    <button class="tab" data-i="3"><i class="sw" style="background:#d5d7d2"></i>V3 · impeccable</button>
+    <button class="tab" data-i="4"><i class="sw" style="background:#8892a0"></i>并排快照</button>
+  </div>
+  <span class="spacer"></span>
+  <button class="btn" id="fit">适宽</button>
+  <button class="btn on" id="real">1 : 1</button>
+  <a class="btn" id="open" href="ui-preview.html" target="_blank" style="text-decoration:none">在新窗口打开</a>
+  <div class="meta" id="meta"></div>
+</header>
+
+<main>
+  <div class="pane on" data-pane="0"><div class="frame-wrap"><iframe data-src="ui-preview.html" title="现任"></iframe></div></div>
+  <div class="pane" data-pane="1"><div class="frame-wrap"><iframe data-src="ui-v1-taste.html" title="V1"></iframe></div></div>
+  <div class="pane" data-pane="2"><div class="frame-wrap"><iframe data-src="ui-v2-hallmark.html" title="V2"></iframe></div></div>
+  <div class="pane" data-pane="3"><div class="frame-wrap"><iframe data-src="ui-v3-impeccable.html" title="V3"></iframe></div></div>
+  <div class="pane" data-pane="4">
+    <div class="grid">
+      <figure><img src="shots/0-current.png" alt="现任" loading="lazy"><figcaption><b>现任</b><span>石墨底 + 电光蓝 · 圆角卡片 · 画窗口外框</span></figcaption></figure>
+      <figure><img src="shots/1-taste.png" alt="V1" loading="lazy"><figcaption><b>V1 · design-taste-frontend</b><span>暖石纸面 + 赭褐 · 单一 2px 圆角 · 零投影</span></figcaption></figure>
+      <figure><img src="shots/2-hallmark.png" alt="V2" loading="lazy"><figcaption><b>V2 · hallmark</b><span>瓷白 + 墨青 · 全 OKLCH 令牌 · 不画窗口外框</span></figcaption></figure>
+      <figure><img src="shots/3-impeccable.png" alt="V3" loading="lazy"><figcaption><b>V3 · impeccable</b><span>搪瓷灰 + 松绿 · 1px 圆角 · 刻蚀线分层</span></figcaption></figure>
+    </div>
+  </div>
+</main>
+
+<div class="hint">
+  <kbd>1</kbd>–<kbd>5</kbd> 切换 · <kbd>←</kbd><kbd>→</kbd> 前后一版 · <kbd>0</kbd> 切适宽 / 1:1 ·
+  五份文件都在本目录，全部单文件离线，双击也能直接看。并排快照是静态 PNG（由无头 Chrome 渲染）。
+</div>
+
+<script>
+(function(){
+  var DATA = [
+    { file:'ui-preview.html',      name:'现任（石墨 + 电光蓝）',  note:'1120×780 窗口外框 · 圆角卡片 · 投影 6 处 · 16 进制令牌' },
+    { file:'ui-v1-taste.html',     name:'V1 · design-taste-frontend', note:'暖石纸面 + 赭褐 · 圆角只有 0/1/2px · 零 box-shadow · 密度 9 · 88 个标注控件' },
+    { file:'ui-v2-hallmark.html',  name:'V2 · hallmark',          note:'瓷白纸 + 墨青 · 全部 OKLCH 命名令牌 · 不画假窗口外框（hallmark gate 47）· Cambria 正体显示字' },
+    { file:'ui-v3-impeccable.html',name:'V3 · impeccable',        note:'搪瓷灰 + 松绿 · 圆角仅 1px · 刻蚀线分层 · ::selection 已主题化 · 量程账本签名件' },
+    { file:null,                   name:'并排快照',                note:'四版首屏静态 PNG 对照（1520×1010，无头 Chrome 渲染）' }
+  ];
+  var tabs = [].slice.call(document.querySelectorAll('.tab'));
+  var panes = [].slice.call(document.querySelectorAll('.pane'));
+  var fit = document.getElementById('fit'), real = document.getElementById('real');
+  var open = document.getElementById('open'), meta = document.getElementById('meta');
+  var current = 0, fitMode = false;
+
+  /* iframe 只在首次显示时赋 src：五份文件都不小，避免一次性全部加载 */
+  function ensure(pane){
+    var f = pane.querySelector('iframe');
+    if (f && !f.getAttribute('src')) f.setAttribute('src', f.dataset.src);
+  }
+  function applyScale(){
+    [].slice.call(document.querySelectorAll('.frame-wrap')).forEach(function(w){
+      if (!fitMode){ w.style.transform = 'none'; return; }
+      var avail = w.parentElement.clientWidth - 28;
+      var s = Math.min(1, avail / 1520);
+      w.style.transform = 'scale(' + s + ')';
+      w.style.height = (1010 * s) + 'px';
+    });
+  }
+  function show(i){
+    current = i;
+    tabs.forEach(function(t,k){ t.classList.toggle('on', k === i); });
+    panes.forEach(function(p,k){ p.classList.toggle('on', k === i); });
+    ensure(panes[i]);
+    var d = DATA[i];
+    meta.innerHTML = '<b>' + d.name + '</b> — ' + d.note;
+    if (d.file){ open.style.display = ''; open.setAttribute('href', d.file); }
+    else { open.style.display = 'none'; }
+    applyScale();
+  }
+  tabs.forEach(function(t){ t.addEventListener('click', function(){ show(+t.dataset.i); }); });
+  fit.addEventListener('click', function(){ fitMode = true; fit.classList.add('on'); real.classList.remove('on'); applyScale(); });
+  real.addEventListener('click', function(){ fitMode = false; real.classList.add('on'); fit.classList.remove('on'); applyScale(); });
+  window.addEventListener('resize', applyScale);
+  document.addEventListener('keydown', function(e){
+    if (e.key >= '1' && e.key <= '5'){ show(+e.key - 1); return; }
+    if (e.key === 'ArrowRight'){ show((current + 1) % DATA.length); return; }
+    if (e.key === 'ArrowLeft'){ show((current + DATA.length - 1) % DATA.length); return; }
+    if (e.key === '0'){ fitMode = !fitMode; fit.classList.toggle('on', fitMode); real.classList.toggle('on', !fitMode); applyScale(); }
+  });
+  show(0);
+})();
+</script>
+</body>
+</html>
