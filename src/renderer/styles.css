@@ -979,6 +979,40 @@ hr.sep { border: none; border-top: 1px solid var(--color-hairline); margin: var(
   border-top: 1px solid var(--color-hairline);
 }
 
+/* ---------- 预设组编辑：成员顺序是语义，必须能手调 ---------- */
+.preset-mgr { width: 640px; max-width: calc(100vw - 32px); }
+.pm-body { padding: var(--space-sm) var(--space-md); display: flex; flex-direction: column; gap: var(--space-sm); max-height: 62vh; overflow-y: auto; }
+.pm-new { display: flex; gap: var(--space-xs); }
+.pm-new .input { flex: 1; min-width: 0; }
+.pm-item { border: 1px solid var(--color-hairline); }
+.pm-head {
+  display: flex; align-items: center; gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--color-surface-1);
+  border-bottom: 1px solid var(--color-hairline);
+}
+.pm-name { font-size: var(--type-sm-size); font-weight: var(--type-emphasis-weight); }
+.pm-count { font-size: var(--type-sm-size); color: var(--color-ink-muted); }
+.pm-edit { padding: var(--space-sm); display: flex; flex-direction: column; gap: var(--space-xs); }
+.pm-picked { display: flex; flex-direction: column; gap: 2px; }
+.pm-row {
+  display: flex; align-items: center; gap: var(--space-xs);
+  padding: 2px var(--space-xs);
+  border: 1px solid var(--color-hairline);
+  font-size: var(--type-sm-size);
+}
+.pm-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-ops { display: inline-flex; gap: var(--space-xxs); }
+.pm-avail { display: flex; flex-wrap: wrap; gap: var(--space-xxs); align-items: center; }
+.pm-edit-foot { display: flex; justify-content: flex-end; gap: var(--space-xs); }
+.pm-excl { padding: 0 var(--space-sm) var(--space-xs); font-size: var(--type-sm-size); }
+.pm-foot {
+  display: flex; align-items: center; gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid var(--color-hairline);
+}
+.pm-foot .hint { max-width: 52%; }
+
 /* ---------- 退化：窄窗口 ---------- */
 @media (max-width: 1180px) {
   .run-grid { grid-template-columns: 1fr; }

@@ -582,6 +582,7 @@ export function App() {
         <PresetManager
           presets={config.presets}
           allServiceIds={Object.keys(config.services)}
+          labels={Object.fromEntries(Object.entries(config.services).map(([id, s]) => [id, s.label || id]))}
           exclusivePresets={config.exclusivePresets ?? []}
           onSave={(presets, exclusivePresets) => { saveConfig({ ...config, presets, exclusivePresets }); setShowPresets(false); }}
           onCancel={() => setShowPresets(false)}

@@ -79,9 +79,9 @@ export function DownloadDialog({ onClose, onDone, onDownload, onCancel, onProgre
           <button className="btn small ghost" disabled={running} onClick={onClose}><X size={13} /></button>
         </div>
 
-        <div className="tab-row">
-          <button className={`btn small${mode === 'name' ? ' primary' : ''}`} disabled={running} onClick={() => setMode('name')}>按名称搜索</button>
-          <button className={`btn small${mode === 'url' ? ' primary' : ''}`} disabled={running} onClick={() => setMode('url')}>直链下载</button>
+        <div className="cfg-tabs">
+          <button className={`cfg-tab${mode === 'name' ? ' on' : ''}`} disabled={running} onClick={() => setMode('name')}>按名称搜索</button>
+          <button className={`cfg-tab${mode === 'url' ? ' on' : ''}`} disabled={running} onClick={() => setMode('url')}>直链下载</button>
         </div>
 
         {mode === 'name' ? (

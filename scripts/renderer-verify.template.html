@@ -152,7 +152,7 @@
           openLogDir: function () { return Promise.resolve(true); },
           quit: function () { return Promise.resolve(); },
           onServicesChanged: function () { return function () {}; },
-          onConfigChanged: function () { return function () {}; },
+          onConfigChanged: function (cb) { setTimeout(cb, 60); return function () {}; },
           onDownloadProgress: function () { return function () {}; }
         };
       })();
@@ -203,6 +203,13 @@
           mark('Carbon·无渐变底', getComputedStyle(document.body).backgroundImage === 'none');
           mark('Carbon·正文 0.16px 字距', getComputedStyle(document.body).letterSpacing === '0.16px',
             getComputedStyle(document.body).letterSpacing);
+          // 内联变更条：外部改了 services.json 时出现，且是 Carbon 的通知样式而不是一句裸露的警告
+          mark('运行态·外部变更条出现', !!q('.notice-bar'), txt('.notice-bar').slice(0, 26));
+          mark('运行态·变更条给出应用与忽略', !!byText('应用') && !!byText('忽略'));
+          mark('Carbon·变更条 0px 圆角且是淡底+1px 边', !!q('.notice-bar') && (function () {
+            var s = getComputedStyle(q('.notice-bar'));
+            return s.borderTopLeftRadius === '0px' && Math.round(parseFloat(s.borderTopWidth)) === 1;
+          })());
 
           var cfgBtn = byText('配置');
           // 先展开 OpenViking 组，验证「启动中」不会显示成「已停止」
@@ -438,9 +445,56 @@
                 mark('探测·形态自动选中', qa('#sec-form input[type=radio]').some(function (r) {
                   return r.checked && r.parentElement && /docker/.test(r.parentElement.textContent);
                 }));
-                finish();
+                phase9();
               }, 400);
             }, 500);
+          }, 300);
+        }
+
+        /* 阶段九：组编辑（成员顺序）与素材获取 */
+        function phase9() {
+          var back = q('.edit-h .btn');
+          if (back) back.click();
+          setTimeout(function () {
+            var tabs = qa('.cfg-tab');
+            if (tabs[1]) tabs[1].click();
+            setTimeout(function () {
+              var editBtn = qa('.group-card button').filter(function (b) { return /编辑/.test(b.textContent); })[0];
+              if (!editBtn) { out.push('MISS | 组卡没有「编辑」入口'); finish(); return; }
+              editBtn.click();
+              setTimeout(function () {
+                mark('组编辑·弹出', !!q('.preset-mgr'));
+                var exp = byText('编辑成员');
+                if (!exp) { out.push('MISS | 组编辑没有「编辑成员」'); finish(); return; }
+                exp.click();
+                setTimeout(function () {
+                  mark('组编辑·成员带序号（顺序可见）', qa('.pm-row .member-ord').length >= 1, qa('.pm-row .member-ord').length + ' 行');
+                  mark('组编辑·显示显示名而不是 id', txt('.pm-picked').indexOf('VLM · Qwen2.5-VL-7B') >= 0, txt('.pm-picked').slice(0, 28));
+                  mark('组编辑·每行都有上移下移移出', qa('.pm-row .pm-ops button').length === qa('.pm-row').length * 3,
+                    qa('.pm-row .pm-ops button').length + ' 个操作键 / ' + qa('.pm-row').length + ' 行');
+                  mark('组编辑·说明顺序就是启动顺序', txt('.preset-mgr').indexOf('顺序就是启动顺序') >= 0);
+                  mark('Carbon·组编辑 0px 圆角', qa('.pm-item, .pm-row').every(function (e) {
+                    return getComputedStyle(e).borderTopLeftRadius === '0px';
+                  }));
+                  var close = byText('关闭');
+                  if (close) close.click();
+                  setTimeout(function () {
+                    if (tabs[2]) tabs[2].click();
+                    setTimeout(function () {
+                      var dl = byText('下载模型');
+                      if (!dl) { out.push('MISS | 素材页没有「下载模型」'); finish(); return; }
+                      dl.click();
+                      setTimeout(function () {
+                        mark('素材获取·两个入口（名称 / 直链）', txt('.modal').indexOf('按名称搜索') >= 0 && txt('.modal').indexOf('直链下载') >= 0);
+                        mark('素材获取·SHA256 字段与校验说明', txt('.modal').indexOf('SHA256') >= 0 && txt('.modal').indexOf('强制校验') >= 0);
+                        mark('素材获取·用页签而不是按钮堆', qa('.modal .cfg-tab').length === 2, qa('.modal .cfg-tab').length + ' 个页签');
+                        finish();
+                      }, 300);
+                    }, 300);
+                  }, 300);
+                }, 300);
+              }, 300);
+            }, 300);
           }, 300);
         }
 

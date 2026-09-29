@@ -62,7 +62,7 @@ try {
   $prevEap = $ErrorActionPreference
   $ErrorActionPreference = 'Continue'
   & $chrome --headless=new --disable-gpu --no-sandbox --hide-scrollbars --force-device-scale-factor=1 `
-    "--window-size=$Width,$Height" --virtual-time-budget=9000 "--screenshot=$Out" $url 2>&1 | Out-Null
+    "--window-size=$Width,$Height" --virtual-time-budget=20000 "--screenshot=$Out" $url 2>&1 | Out-Null
   $ErrorActionPreference = $prevEap
   if (Test-Path $Out) {
     Write-Host ("screenshot: {0}  {1} KB" -f $Out, [math]::Round((Get-Item $Out).Length / 1KB, 0)) -ForegroundColor Green
@@ -75,7 +75,7 @@ try {
     $eap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     $domFile = Join-Path $env:TEMP 'dsh-renderer-dom.html'
-    & $chrome --headless=new --disable-gpu --no-sandbox --virtual-time-budget=9000 --dump-dom $url 2>$null |
+    & $chrome --headless=new --disable-gpu --no-sandbox --virtual-time-budget=20000 --dump-dom $url 2>$null |
       Set-Content -LiteralPath $domFile -Encoding UTF8
     $dom = Get-Content -LiteralPath $domFile -Raw
     Remove-Item $domFile -Force -ErrorAction SilentlyContinue
