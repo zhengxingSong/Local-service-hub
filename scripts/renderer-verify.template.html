@@ -275,11 +275,33 @@
                   }));
                   var cancel = byText('取消');
                   if (cancel) cancel.click();
-                  finish();
+                  phase6();
                 }, 300);
               }, 300);
             }, 300);
           }, 300);
+        }
+
+        /* 阶段六：处置抽屉（状态 → 归因 → 修正动作 → 日志） */
+        function phase6() {
+          var logBtns = qa('.card-actions button').filter(function (b) { return b.textContent.trim() === '日志'; });
+          if (!logBtns.length) { out.push('MISS | 找不到卡片上的「日志」入口'); finish(); return; }
+          logBtns[0].click();
+          setTimeout(function () {
+            mark('抽屉·打开且分三段', !!q('.drawer') && qa('.drawer-sec').length >= 3, qa('.drawer-sec').length + ' 段');
+            mark('抽屉·状态键值表', qa('.drawer .kv .k').length >= 7, qa('.drawer .kv .k').length + ' 个字段');
+            mark('抽屉·给出归因结论', !!q('.diag') && txt('.diag').length > 0, txt('.diag').slice(0, 34));
+            mark('抽屉·标注置信度', !!q('.conf') && /证据|推断/.test(txt('.conf')), txt('.conf'));
+            mark('抽屉·列出判断依据', qa('.drawer .ev-line').length >= 1, qa('.drawer .ev-line').length + ' 条依据');
+            mark('抽屉·修正动作可点', qa('.drawer-acts button').length >= 2, qa('.drawer-acts button').length + ' 个动作');
+            mark('抽屉·日志同屏可达', !!q('.drawer .log-viewer') && (txt('.drawer .log-viewer') || '').length > 10);
+            mark('Carbon·抽屉 0px 圆角', qa('.drawer, .diag').every(function (e) {
+              return getComputedStyle(e).borderTopLeftRadius === '0px';
+            }));
+            var closeBtn = q('.drawer-h button');
+            if (closeBtn) closeBtn.click();
+            finish();
+          }, 400);
         }
 
         setTimeout(phase1, 400);

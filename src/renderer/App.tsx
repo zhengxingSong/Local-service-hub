@@ -10,7 +10,8 @@ import { ConfigView } from './components/ConfigView';
 import { PresetManager } from './components/PresetManager';
 import { ServiceEditor } from './components/ServiceEditor';
 import { SettingsPanel } from './components/SettingsPanel';
-import { LogViewer } from './components/LogViewer';
+import { ServiceDrawer } from './components/ServiceDrawer';
+import { Fix } from './diagnose';
 import { DownloadDialog } from './components/DownloadDialog';
 
 type EditorState = { id: string | null; cfg: ServiceConfig | null } | null;
@@ -164,12 +165,32 @@ export function App() {
     });
   };
 
+  /** 处置抽屉里的修正动作：能就地做的就地做，要改配置的把人送过去 */
+  const drawerFix = (f: Fix) => {
+    const id = logId;
+    if (!id) return;
+    if (f.id === 'retry') { setLogId(null); gateService(id); return; }
+    if (f.id === 'stop') { void doAction(() => api.stop(id), '已停止'); return; }
+    if (f.id === 'release' && f.target) {
+      const target = f.target;
+      void doAction(() => api.stop(target), '已停止占用者');
+      return;
+    }
+    if (f.id === 'open-log-dir') { void api.openLogDir(); return; }
+    if (f.id === 'edit') { setLogId(null); openEditor(id); return; }
+    if (f.id === 'enable' && config) {
+      const svc = config.services[id];
+      if (svc) saveConfig({ ...config, services: { ...config.services, [id]: { ...svc, enabled: true } } });
+    }
+  };
+
   /** 决策面的就地出口：停占用者后立刻继续启动；其余出口把人送到能改的地方 */
   const preflightAction = async (a: PreflightAction) => {
     if (!pf) return;
     const go = pf.run;
     if (a.id === 'release' && a.target) {
-      await doAction(() => api.stop(a.target as string), '已停止占用者');
+      const target = a.target;
+      await doAction(() => api.stop(target), '已停止占用者');
       setPf(null);
       go();
       return;
@@ -319,6 +340,9 @@ export function App() {
     setEditor({ id, cfg: id && config ? config.services[id] ?? null : null });
     setView('editor');
   };
+
+  /** 处置抽屉对应的服务（它可能刚被删掉） */
+  const drawerSvc = logId ? services.find((s) => s.id === logId) ?? null : null;
 
   return (
     <div className="app">
@@ -507,10 +531,14 @@ export function App() {
         />
       )}
 
-      {logId && (
-        <LogViewer
-          serviceId={logId}
+      {logId && drawerSvc && config && (
+        <ServiceDrawer
+          svc={drawerSvc}
+          config={config}
+          portOwners={portOwners}
+          busy={busy}
           onClose={() => setLogId(null)}
+          onFix={drawerFix}
           getLog={(id, tail) => api.getLog(id, tail)}
           clearLog={(id) => api.clearLog(id)}
           openLogDir={() => api.openLogDir()}
