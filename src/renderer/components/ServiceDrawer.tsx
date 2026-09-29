@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FolderOpen, RefreshCw, X } from 'lucide-react';
-import { AppConfig, ServiceView } from '../types';
+import { AppConfig, RunRecord, ServiceView } from '../types';
 import { diagnose, Fix } from '../diagnose';
 import { dotClass, formatMB, stateLabel } from './PurposeCard';
 
@@ -14,6 +14,32 @@ interface Props {
   getLog: (id: string, tail?: number) => Promise<string>;
   clearLog: (id: string) => Promise<boolean>;
   openLogDir: () => Promise<boolean>;
+  listRuns: (serviceId?: string, limit?: number) => Promise<RunRecord[]>;
+  clearRuns: (serviceId?: string) => Promise<number>;
+}
+
+const OUTCOME_LABEL: Record<RunRecord['outcome'], string> = {
+  running: '进行中',
+  stopped: '已停止',
+  failed: '失败',
+};
+
+/** 运行时长；没有结束时间时不编造，如实说明。 */
+function runDuration(r: RunRecord): string {
+  if (!r.endedAt) return '—';
+  const a = Date.parse(r.startedAt);
+  const b = Date.parse(r.endedAt);
+  if (Number.isNaN(a) || Number.isNaN(b)) return '—';
+  const ms = Math.max(0, b - a);
+  if (ms < 1000) return `${ms} ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)} 秒`;
+  if (ms < 3600000) return `${Math.floor(ms / 60000)} 分 ${Math.round((ms % 60000) / 1000)} 秒`;
+  return `${(ms / 3600000).toFixed(1)} 小时`;
+}
+
+function readyLabel(ms: number | null): string {
+  if (ms === null) return '—';
+  return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} 秒`;
 }
 
 function fmtTime(iso: string | null): string {
@@ -34,12 +60,23 @@ const CONF_LABEL = { high: '证据明确', medium: '按时长推断', low: '证�
  * 但它必须同屏可达——否则归因就成了无法核对的断言。
  */
 export function ServiceDrawer({
-  svc, config, portOwners, busy, onClose, onFix, getLog, clearLog, openLogDir,
+  svc, config, portOwners, busy, onClose, onFix, getLog, clearLog, openLogDir, listRuns, clearRuns,
 }: Props) {
   const [log, setLog] = useState('');
   const [loading, setLoading] = useState(true);
+  const [runs, setRuns] = useState<RunRecord[]>([]);
   const boxRef = useRef<HTMLDivElement>(null);
   const d = diagnose({ svc, config, portOwners });
+
+  const refreshRuns = useCallback(async () => {
+    try {
+      setRuns(await listRuns(svc.id, 20));
+    } catch {
+      setRuns([]);
+    }
+  }, [listRuns, svc.id]);
+
+  useEffect(() => { void refreshRuns(); }, [refreshRuns]);
 
   const refresh = useCallback(async () => {
     try {
@@ -120,7 +157,44 @@ export function ServiceDrawer({
             </div>
           </div>
 
-          {/* 3. 日志 */}
+          {/* 3. 运行记录：抽屉里的"一直怎么样"，与归因的"这一次为什么"互补 */}
+          <div className="drawer-sec">
+            <div className="drawer-sec-h">
+              运行记录
+              <span className="list-spacer" />
+              <button className="btn small ghost" title="刷新" onClick={() => void refreshRuns()}><RefreshCw size={13} /></button>
+              <button className="btn small ghost" disabled={busy} onClick={() => void clearRuns(svc.id).then(() => refreshRuns())}>清空</button>
+            </div>
+            {runs.length === 0 ? (
+              <div className="hint">还没有运行记录。每次启动都会在这里留下一条。</div>
+            ) : (
+              <table className="cfg-table">
+                <thead>
+                  <tr>
+                    <th>开始</th><th style={{ width: 78 }}>时长</th><th style={{ width: 68 }}>就绪</th>
+                    <th style={{ width: 62 }}>结果</th><th style={{ width: 54 }}>退出码</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {runs.map((r) => (
+                    <tr key={r.id}>
+                      <td><span className="cfg-mono">{fmtTime(r.startedAt)}</span></td>
+                      <td><span className="cfg-mono">{runDuration(r)}</span></td>
+                      <td><span className="cfg-mono">{readyLabel(r.readyMs)}</span></td>
+                      <td><span className={`runout ${r.outcome}`}>{OUTCOME_LABEL[r.outcome]}</span></td>
+                      <td><span className="cfg-mono">{r.returncode ?? '—'}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <span className="hint">
+              就绪耗时能看出模型是不是越起越慢；退出码与结果能区分"没起来"和"跑着崩了"。
+              上次应用退出时还在运行的记录，结束时间留空——无法知道它究竟何时停的。
+            </span>
+          </div>
+
+          {/* 4. 日志 */}
           <div className="drawer-sec">
             <div className="drawer-sec-h">
               日志

@@ -39,9 +39,10 @@ export function ResourceLedger({ gpu, services, warnThreshold }: ResourceLedgerP
   const free = Math.max(total - used, 0);
   const pct = total > 0 ? Math.round((used / total) * 100) : 0;
 
-  // 本应用管理的服务占用了多少（实测优先，否则推算）
+  // 本应用管理的服务占用了多少（实测优先，否则推算）。
+  // 「启动中/重启中」也算占用者：它们的显存已经分配出去了。
   const attribution: Attribution[] = services
-    .filter((s) => s.state === 'running')
+    .filter((s) => s.state === 'running' || s.state === 'starting' || s.state === 'restarting')
     .map((s) => ({
       id: s.id,
       label: s.label || s.id,
@@ -56,7 +57,9 @@ export function ResourceLedger({ gpu, services, warnThreshold }: ResourceLedgerP
   const others = Math.max(used - managed, 0);
 
   // 可启动清单：已停止、已启用、有需求估算的服务
-  const candidates = services.filter((s) => s.state !== 'running' && s.enabled);
+  const candidates = services.filter(
+    (s) => s.state !== 'running' && s.state !== 'starting' && s.state !== 'restarting' && s.enabled,
+  );
   const fits = candidates.filter((s) => (s.vramEstimateMB ?? 0) > 0 && (s.vramEstimateMB ?? 0) <= free);
   const needsRelease = candidates
     .filter((s) => (s.vramEstimateMB ?? 0) > free)

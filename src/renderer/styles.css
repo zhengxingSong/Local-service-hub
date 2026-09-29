@@ -887,6 +887,11 @@ hr.sep { border: none; border-top: 1px solid var(--color-hairline); margin: var(
 .ev-line::before { content: '·'; position: absolute; left: 2px; }
 .drawer-acts { display: flex; gap: var(--space-xs); flex-wrap: wrap; }
 .drawer .log-viewer { max-height: 40vh; }
+.runout { font-size: var(--type-sm-size); padding: 0 5px; border: 1px solid var(--color-hairline); white-space: nowrap; }
+.runout.running { border-color: var(--color-primary); color: var(--color-primary); }
+.runout.failed { border-color: var(--color-error); color: var(--color-error); }
+.runout.stopped { color: var(--color-ink-muted); }
+.drawer .cfg-table { font-size: var(--type-sm-size); }
 
 /* ---------- 退化：窄窗口 ---------- */
 @media (max-width: 1180px) {

@@ -542,6 +542,8 @@ export function App() {
           getLog={(id, tail) => api.getLog(id, tail)}
           clearLog={(id) => api.clearLog(id)}
           openLogDir={() => api.openLogDir()}
+          listRuns={(serviceId, limit) => api.listRuns(serviceId, limit)}
+          clearRuns={(serviceId) => api.clearRuns(serviceId)}
         />
       )}
     </div>

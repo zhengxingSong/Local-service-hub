@@ -53,7 +53,7 @@ describe('归因：把「为什么起不来」变成有证据的判断', () => {
 
   it('启动中且端口已在监听时，结论要区分「在听」与「就绪判定未过」', () => {
     const d = diagnose({
-      svc: view({ state: 'loading', listening: true, startedAt: new Date(Date.now() - 12000).toISOString() }),
+      svc: view({ state: 'starting', listening: true, startedAt: new Date(Date.now() - 12000).toISOString() }),
       config: base, portOwners: {},
     });
     expect(d.cause).toBe('ready');

@@ -116,8 +116,8 @@ export function diagnose({ svc, config, portOwners }: DiagnoseInput): Diagnosis 
     };
   }
 
-  /* 还在启动/就绪阶段 */
-  if (svc.state === 'loading') {
+  /* 还在启动/就绪阶段。'starting' 是主进程真实的状态名，'loading' 为历史兼容。 */
+  if (svc.state === 'starting' || svc.state === 'loading') {
     const started = ms(svc.startedAt);
     const elapsed = started !== null ? Date.now() - started : null;
     evidence.push('状态是「启动中」：进程已拉起，但就绪判定还没通过。');

@@ -9,6 +9,7 @@ import { scanModels } from './model-scanner';
 import { sampleVram } from './gpu-monitor';
 import { ServiceManager } from './service-manager';
 import { migrateUserData } from './user-data-migration';
+import { RunLog } from './run-log';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const APP_TITLE = '服务中枢';
@@ -24,6 +25,8 @@ const migration = isDefaultUserDataDir
   : { migrated: false, from: null as string | null, copied: [] as string[] };
 
 const configStore = new ConfigStore(join(userDataDir, 'services.json'));
+/** 运行记录：由状态广播推导，落盘在用户数据目录 */
+const runLog = new RunLog(join(userDataDir, 'runs.json'));
 let config: AppConfig = configStore.load();
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -155,6 +158,10 @@ function registerIpc(): void {
 
   // 配置快照：列出与恢复。恢复走与保存同一条重载路径，避免两套生效逻辑。
   ipcMain.handle('app:list-snapshots', () => configStore.listSnapshots());
+
+  // 运行记录：每次「启动 → 结束」的起止、就绪耗时与资源峰值
+  ipcMain.handle('runs:list', (_e, serviceId?: string, limit?: number) => runLog.list(serviceId, limit));
+  ipcMain.handle('runs:clear', (_e, serviceId?: string) => runLog.clear(serviceId));
 
   ipcMain.handle('app:restore-snapshot', async (_e, name: string) => {
     if (!configStore.restoreSnapshot(name)) return { ok: false };
@@ -295,6 +302,8 @@ function broadcastStatus(): void {
   void (async () => {
     try {
       const services = (await serviceManager?.viewAll()) ?? [];
+      // 运行记录由状态快照推导：每次广播都是一次观察点
+      runLog.observe(services);
       const gpu = await sampleVram();
       mainWindow?.webContents.send('services:changed', { services, gpu });
     } catch { /* 渲染进程可能已退出 */ } finally {

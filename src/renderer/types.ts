@@ -67,6 +67,24 @@ export interface SnapshotInfo {
   reason: string;
 }
 
+/** 运行记录：一次「启动 → 结束」 */
+export interface RunRecord {
+  id: string;
+  serviceId: string;
+  label: string;
+  kind: string;
+  startedAt: string;
+  endedAt: string | null;
+  /** 启动到就绪判定通过的毫秒数；null = 未就绪或未判定 */
+  readyMs: number | null;
+  outcome: 'running' | 'stopped' | 'failed';
+  returncode: number | null;
+  pid: number | null;
+  port: number;
+  vramPeakMB: number | null;
+  errorText: string | null;
+}
+
 export interface ServiceConfig {
   label: string;
   role: string;

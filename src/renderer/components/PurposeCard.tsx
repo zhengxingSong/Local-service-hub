@@ -22,10 +22,12 @@ export interface PurposeCardProps {
   onDetail: (id: string) => void;
 }
 
-/** 单成员状态 → 中文状态词（与 dot-* 类名同源） */
+/** 单成员状态 → 中文状态词（与 dot-* 类名同源）
+ *  注意 'starting' 是主进程真实的状态名；'loading' 只是历史写法，保留兼容。 */
 export function stateLabel(svc: ServiceView): string {
   switch (svc.state) {
     case 'running': return svc.healthy ? '运行中' : '运行中 · 未就绪';
+    case 'starting':
     case 'loading': return '启动中';
     case 'restarting': return '重启中';
     case 'failed': return '失败';
@@ -36,6 +38,7 @@ export function stateLabel(svc: ServiceView): string {
 export function dotClass(svc: ServiceView): string {
   switch (svc.state) {
     case 'running': return svc.healthy ? 'dot-running' : 'dot-loading';
+    case 'starting':
     case 'loading': return 'dot-loading';
     case 'restarting': return 'dot-restarting';
     case 'failed': return 'dot-failed';

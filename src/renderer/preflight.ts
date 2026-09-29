@@ -68,9 +68,15 @@ export interface PreflightInput {
   gpu: GpuInfo | null;
 }
 
-/** 该成员是否已经在运行（预检只关心"还没跑的"要不要资源） */
+/** 该成员是否已经在运行（预检只关心"还没跑的"要不要资源）
+ *  'starting' 是主进程真实的状态名；'loading' 为历史兼容。 */
 function isUp(svc: ServiceView | undefined): boolean {
-  return !!svc && (svc.state === 'running' || svc.state === 'loading' || svc.state === 'restarting');
+  return !!svc && (
+    svc.state === 'running'
+    || svc.state === 'starting'
+    || svc.state === 'loading'
+    || svc.state === 'restarting'
+  );
 }
 
 export function evaluatePreflight(input: PreflightInput): PreflightResult {
