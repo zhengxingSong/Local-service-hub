@@ -144,21 +144,23 @@ window.addEventListener('load', function () { setTimeout(function () {
     if (clickText('预设组')) mark('页签·预设组', has('OpenViking 组'));
     if (clickText('服务')) mark('页签·服务', has('embedding') || has('ov-server'));
   }
+  out.push('DIAG-V chain after run: ' + all('.mw').map(function(m){return m.id+(m.classList.contains('on')?'+':'-');}).join(','));
   if (clickText('服务编辑')) mark('视图·服务编辑', has('① 形态') || has('形态'));
   if (clickText('设置')) mark('视图·设置', has('配置快照') || has('快照'));
-  if (clickText('运行')) mark('视图·运行', has('显存'));
+  out.push('DIAG-V before 运行: ' + all('.mw').map(function(m){return m.id+(m.classList.contains('on')?'+':'-');}).join(','));
+  if (clickText('运行')) { mark('视图·运行', has('显存')); out.push('DIAG-V after 运行: ' + all('.mw').map(function(m){return m.id+(m.classList.contains('on')?'+':'-');}).join(',')); }
 
-  /* 五个模态：判定「浮层是否真的出现」，不依赖标题措辞。
-     每次测前先派发 Esc 清场——否则上一步残留的浮层会让计数停在 1→1，
-     而「不允许叠模态」本身正是设计规则，不该被判成失败。 */
+  out.push('DIAG-MODALS before loop: ' + all('.mw').map(function(m){return m.id+'='+(m.classList.contains('on')?'on':'off')+'/vis'+vis(m);}).join(' '));
+  /* 五个模态：判定「浮层是否真的出现」，不依赖标题措辞 */
   ['预检', '危险确认', '素材获取', '探测', '组编辑'].forEach(function (name) {
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     var btn = all('button,[role=button]').filter(function (b) { return b.textContent.trim() === name && vis(b); })[0];
     if (!btn) { out.push('MISS | 找不到浮层按钮「' + name + '」'); return; }
+    out.push('DIAG-STEP ' + name + ' btnTag=' + btn.tagName + ' btnCls=' + btn.className + ' chain=' + all('.mw').map(function(m){return m.id+(m.classList.contains('on')?'+':'-');}).join(',') + ' before=' + before);
     var before = visibleModals();
     btn.click();
     mark('模态·' + name, visibleModals() > before, '可见浮层 ' + before + ' → ' + visibleModals());
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    out.push('DIAG-STEP ' + name + ' after-esc chain=' + all('.mw').map(function(m){return m.id+(m.classList.contains('on')?'+':'-');}).join(','));
   });
   /* 多行为控件的回归检查：探测模态的主按钮同时带 data-close + data-go + data-toast，
      三者必须都生效。单标志幂等（dataset.bound）会让后两个被静默跳过。 */

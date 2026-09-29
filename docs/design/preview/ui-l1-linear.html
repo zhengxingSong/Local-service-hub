@@ -1,0 +1,1669 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>服务中枢 · 高精度可交互预览（Linear 设计语言）</title>
+<!--
+  ============================================================================
+  服务中枢 — 高精度静态可交互预览
+  视觉语言来源：design-md-library / references/linear.app/DESIGN.md
+  （令牌名逐条对应参照文件；注释里以 linear: <令牌路径> 标注可追溯来源）
+
+  规则来自 DESIGN.md 的 ## Do's and Don'ts，而不是个人品味：
+    Do   : canvas #010102 作锚面；primary 只用于品牌标记/焦点环/主 CTA/链接强调；
+           四级 surface 阶梯承载层级；display 600 配 body 400；display 负字距；
+           卡片 rounded.md/lg；产品 UI 自身制造节奏。
+    Don't: 不出浅色模式；lavender 不做区块底/卡片填充；不引入第二彩色强调；
+           不加氛围渐变/聚光灯卡片；CTA 不做全圆；不用 #000000 真黑；不做多彩强调混用。
+
+  字体适配（本机离线可用：Segoe UI / Noto Sans SC / Cascadia Mono）：
+    Linear Display → "Segoe UI"（系统 sans）+ "Noto Sans SC"（中文）
+    Linear Text    → 同上；Linear Mono → "Cascadia Mono"
+    保留参照的字重（500–600）与负字距签名。
+
+  数据：硬件 / 8 个服务 / 2 个预设组 / 9 个 GGUF 素材 / 日志体积 —— 逐字取自
+  本机 services.json 与实时状态，未编造。排障与切换两场景为合成演示，页面内已标注边界。
+
+  功能面：4 视图 · 5 模态 · 1 抽屉 · Toast（上限 4）· 2 条内联条 · 标注层
+  （data-fn 功能 / data-cond 可用条件 / data-rel 关联锚点）。
+  行为绑定一律走**事件委托**：一个控件可同时带多个 data-* 行为，逐个执行。
+  ============================================================================
+-->
+<style>
+/* ============================================================================
+   1. 设计令牌 —— 命名与 linear.app/DESIGN.md 的令牌一一对应
+   ============================================================================ */
+:root{
+  /* ---- linear: colors.* ---- */
+  --color-primary:#5e6ad2;              /* linear: colors.primary         薰衣草蓝 */
+  --color-on-primary:#ffffff;           /* linear: colors.on-primary */
+  --color-primary-hover:#828fff;        /* linear: colors.primary-hover   CTA 悬停 */
+  --color-primary-focus:#5e69d1;        /* linear: colors.primary-focus   按下 / 焦点环 */
+  --color-brand-secure:#7a7fad;         /* linear: colors.brand-secure */
+  --color-ink:#f7f8f8;                  /* linear: colors.ink */
+  --color-ink-muted:#d0d6e0;            /* linear: colors.ink-muted */
+  --color-ink-subtle:#8a8f98;           /* linear: colors.ink-subtle */
+  --color-ink-tertiary:#62666d;         /* linear: colors.ink-tertiary */
+  --color-canvas:#010102;               /* linear: colors.canvas          系统锚面 */
+  --color-surface-1:#0f1011;            /* linear: colors.surface-1 */
+  --color-surface-2:#141516;            /* linear: colors.surface-2 */
+  --color-surface-3:#18191a;            /* linear: colors.surface-3 */
+  --color-surface-4:#191a1b;            /* linear: colors.surface-4 */
+  --color-hairline:#23252a;             /* linear: colors.hairline */
+  --color-hairline-strong:#34343a;      /* linear: colors.hairline-strong */
+  --color-hairline-tertiary:#3e3e44;    /* linear: colors.hairline-tertiary */
+  --color-inverse-canvas:#ffffff;       /* linear: colors.inverse-canvas */
+  --color-inverse-surface-1:#f5f6f6;    /* linear: colors.inverse-surface-1 */
+  --color-inverse-ink:#000000;          /* linear: colors.inverse-ink */
+  --color-semantic-success:#27a644;     /* linear: colors.semantic-success 唯一语义色 */
+  --color-semantic-overlay:#000000;     /* linear: colors.semantic-overlay 模态遮罩基色 */
+
+  /* ---- 延伸令牌：参照文件 ## Known Gaps 明确记录「产品内 UI 使用更丰富的
+         tag 调色板（red/orange/yellow/green/blue/purple）用于优先级与标签」。
+         本产物是产品内界面，因此把这套色按用途命名，并从参照的紫色族派生。 ---- */
+  --color-state-idle:#62666d;           /* 未激活（取自 linear: colors.ink-tertiary） */
+  --color-state-idle-bg:#141516;        /* 未激活底（linear: colors.surface-2） */
+  --color-state-ok:#27a644;             /* 可用（linear: colors.semantic-success） */
+  --color-state-ok-bg:#0e1a12;
+  --color-state-busy:#8b93e8;           /* 进行中——派生自 primary 的浅色端 */
+  --color-state-busy-bg:#151729;
+  --color-state-warn:#d29922;           /* 警告——参照 Known Gaps 的 in-product orange */
+  --color-state-warn-bg:#1d1710;
+  --color-state-bad:#e5484d;            /* 失败——参照 Known Gaps 的 in-product red */
+  --color-state-bad-bg:#1e1113;
+
+  /* ---- linear: typography.*  （字号按产品内界面适配，字重与字距保留参照签名） ---- */
+  --font-display:"Segoe UI","Noto Sans SC","Microsoft YaHei UI",system-ui,-apple-system,sans-serif;
+  --font-text:"Segoe UI","Noto Sans SC","Microsoft YaHei UI",system-ui,-apple-system,sans-serif;
+  --font-mono:"Cascadia Mono","Cascadia Code",Consolas,"Noto Sans SC",ui-monospace,monospace;
+
+  --fs-display-md:24px;   --fw-display-md:600; --ls-display-md:-0.8px;  --lh-display-md:1.15;
+  --fs-headline:18px;     --fw-headline:600;   --ls-headline:-0.4px;    --lh-headline:1.20;
+  --fs-card-title:14.5px; --fw-card-title:500; --ls-card-title:-0.2px;  --lh-card-title:1.25;
+  --fs-subhead:15px;      --fw-subhead:400;    --ls-subhead:-0.2px;     --lh-subhead:1.40;
+  --fs-body-lg:14px;      --fw-body-lg:400;    --ls-body-lg:-0.05px;    --lh-body-lg:1.50;
+  --fs-body:13px;         --fw-body:400;       --ls-body:0;             --lh-body:1.50;
+  --fs-body-sm:12.5px;    --fw-body-sm:400;    --ls-body-sm:0;          --lh-body-sm:1.50;
+  --fs-caption:11.5px;    --fw-caption:400;    --ls-caption:0;          --lh-caption:1.40;
+  --fs-button:13px;       --fw-button:500;     --ls-button:0;           --lh-button:1.20;
+  --fs-eyebrow:11px;      --fw-eyebrow:500;    --ls-eyebrow:0.4px;      --lh-eyebrow:1.30;
+  --fs-mono:12px;         --fw-mono:400;       --ls-mono:0;             --lh-mono:1.60;
+
+  /* ---- linear: rounded.* ---- */
+  --rounded-xs:4px;    /* linear: rounded.xs  状态芯片 */
+  --rounded-sm:6px;    /* linear: rounded.sm  行内标签 */
+  --rounded-md:8px;    /* linear: rounded.md  按钮 / 输入框（CTA 也用它） */
+  --rounded-lg:12px;   /* linear: rounded.lg  卡片 / 面板 */
+  --rounded-xl:16px;   /* linear: rounded.xl  产品截图面板 → 本产物 = 应用窗口 */
+  --rounded-xxl:24px;  /* linear: rounded.xxl 超大横幅（本产物未使用） */
+  --rounded-pill:9999px;/* linear: rounded.pill 胶囊开关 */
+  --rounded-full:9999px;/* linear: rounded.full 圆点 */
+
+  /* ---- linear: spacing.* ---- */
+  --spacing-xxs:4px;
+  --spacing-xs:8px;
+  --spacing-sm:12px;
+  --spacing-md:16px;
+  --spacing-lg:24px;
+  --spacing-xl:32px;
+  --spacing-xxl:48px;
+  --spacing-section:96px;  /* linear: spacing.section —— 营销页段间距，产品内退化为区块间距 */
+
+  /* ---- 高度：linear: components.* 的像素规格 ---- */
+  --ctrl-h:28px;           /* 控件高 */
+  --row-h:34px;            /* 表格行高（ui-layout.md 核算值） */
+  --card-h:96px;           /* 普通用途卡高（ui-layout.md 核算值） */
+  --card-h-alert:140px;    /* 带异常区的卡高（ui-layout.md 核算值） */
+  --col-res-w:300px;       /* 资源面固定宽（ui-layout.md） */
+  --col-cards-w:760px;     /* 用途卡区宽（ui-layout.md） */
+  --drawer-w:440px;        /* linear: components 侧栏 → D1 抽屉固定宽（ui-layout.md） */
+  --toast-w:320px;         /* T1 Toast 固定宽（ui-layout.md） */
+  --win-w:1120px;          /* S 壳真实尺寸（ui-layout.md） */
+  --win-h:780px;
+  --win-scale:1;           /* 窄屏时缩放整个真实尺寸窗口，而不是让内容溢出 */
+  --winframe-w:1120px;     /* 缩放后的占位宽（见第 10 节响应式） */
+  --win-scaled-h:780px;    /* 缩放后的占位高：transform 不改变布局盒，外壳高度必须显式给 */
+
+  /* ---- linear: Elevation & Depth（surface 阶梯 + 发丝边框，几乎不用投影） ---- */
+  --elev-0:none;
+  --elev-1:0 0 0 1px var(--color-hairline);
+  --elev-2:0 0 0 1px var(--color-hairline-strong);
+  --elev-3:0 8px 24px rgba(0,0,0,.55);          /* 模态/抽屉：唯一允许的投影，仍克制 */
+  --elev-focus:0 0 0 2px rgba(94,105,209,.50);  /* linear: Elevation 4 focus ring */
+  --edge-highlight:inset 0 1px 0 rgba(255,255,255,.045); /* linear: 抬升面板顶边微高光 */
+}
+
+/* ============================================================================
+   2. 基础
+   ============================================================================ */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--color-canvas);
+  color:var(--color-ink);
+  font-family:var(--font-text);
+  font-size:var(--fs-body);
+  line-height:var(--lh-body);
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+:focus{outline:none}
+:focus-visible{outline:2px solid var(--color-primary-focus);outline-offset:1px}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:var(--fs-mono)}
+.sp{flex:1}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--color-hairline-strong);border-radius:var(--rounded-pill);border:3px solid var(--color-canvas)}
+::-webkit-scrollbar-thumb:hover{background:var(--color-hairline-tertiary)}
+
+/* ============================================================================
+   3. 预览外壳
+   ============================================================================ */
+.shell{display:flex;gap:var(--spacing-md);padding:var(--spacing-md);min-height:100vh;align-items:flex-start}
+.stage{flex:1;min-width:0;display:flex;flex-direction:column;gap:var(--spacing-sm)}
+.stage-head{
+  background:var(--color-surface-1);border-radius:var(--rounded-lg);
+  box-shadow:var(--elev-1),var(--edge-highlight);padding:var(--spacing-sm) var(--spacing-md);
+  display:flex;flex-direction:column;gap:var(--spacing-xs);
+}
+.stage-title{
+  font-family:var(--font-display);font-size:var(--fs-headline);font-weight:var(--fw-headline);
+  letter-spacing:var(--ls-headline);display:flex;align-items:center;gap:var(--spacing-xs);
+}
+.stage-title .mark{
+  width:18px;height:18px;border-radius:var(--rounded-xs);background:var(--color-primary);
+  color:var(--color-on-primary);font-size:11px;font-weight:600;display:grid;place-items:center;
+  flex:none;font-family:var(--font-display);
+}
+.tools{display:flex;flex-wrap:wrap;gap:var(--spacing-sm);align-items:center}
+.grp{display:flex;align-items:center;gap:var(--spacing-xxs)}
+.lbl{font-size:var(--fs-eyebrow);font-weight:var(--fw-eyebrow);letter-spacing:var(--ls-eyebrow);
+  text-transform:uppercase;color:var(--color-ink-tertiary);padding-right:var(--spacing-xxs)}
+.stage-sub{font-size:var(--fs-caption);color:var(--color-ink-subtle);line-height:var(--lh-caption)}
+
+/* ---- 按钮：linear: components.button-* ---- */
+.btn{
+  font-family:var(--font-text);font-size:var(--fs-button);font-weight:var(--fw-button);
+  line-height:var(--lh-button);letter-spacing:var(--ls-button);
+  height:var(--ctrl-h);padding:0 12px;border-radius:var(--rounded-md);border:0;
+  background:var(--color-surface-1);color:var(--color-ink);
+  box-shadow:0 0 0 1px var(--color-hairline);
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  cursor:pointer;white-space:nowrap;flex:none;
+}
+.btn:hover{background:var(--color-surface-2);box-shadow:0 0 0 1px var(--color-hairline-strong)}
+.btn:active{background:var(--color-surface-1);box-shadow:var(--elev-focus)}
+.btn.primary{background:var(--color-primary);color:var(--color-on-primary);box-shadow:none} /* linear: components.button-primary */
+.btn.primary:hover{background:var(--color-primary-hover)}
+.btn.primary:active{background:var(--color-primary-focus)}
+.btn.ghost{background:transparent;box-shadow:none;color:var(--color-ink-muted)}
+.btn.ghost:hover{background:var(--color-surface-2);color:var(--color-ink);box-shadow:none}
+.btn.sm{height:24px;padding:0 9px;font-size:var(--fs-caption);border-radius:var(--rounded-sm)}
+.btn.danger{color:var(--color-state-bad);box-shadow:0 0 0 1px var(--color-hairline)}
+.btn.danger:hover{background:var(--color-state-bad-bg);color:#ff8b8e;box-shadow:0 0 0 1px #43222a}
+.btn[disabled],.btn.dis{opacity:.45;cursor:not-allowed}
+.btn .i{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+/* 预览外壳的标签切换：linear: components.pricing-tab-default / -selected */
+.tb{
+  font-family:var(--font-text);font-size:var(--fs-caption);font-weight:var(--fw-button);
+  height:26px;padding:0 11px;border-radius:var(--rounded-pill);border:0;cursor:pointer;
+  background:var(--color-canvas);color:var(--color-ink-subtle);white-space:nowrap;
+}
+.tb:hover{color:var(--color-ink-muted);background:var(--color-surface-1)}
+.tb.on{background:var(--color-surface-2);color:var(--color-ink)}
+
+/* ---- 状态芯片：linear: components.status-badge ---- */
+.badge{
+  display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 7px;
+  border-radius:var(--rounded-pill);font-size:var(--fs-caption);font-weight:400;
+  background:var(--color-surface-2);color:var(--color-ink-muted);white-space:nowrap;flex:none;
+}
+.badge.ok{background:var(--color-state-ok-bg);color:#5ed07a}
+.badge.bad{background:var(--color-state-bad-bg);color:#ff8b8e}
+.badge.warn{background:var(--color-state-warn-bg);color:#e5b95c}
+.badge.info{background:var(--color-state-busy-bg);color:var(--color-state-busy)}
+.badge.plain{background:var(--color-surface-2);color:var(--color-ink-subtle)}
+.dot{width:7px;height:7px;border-radius:var(--rounded-full);flex:none;display:inline-block;background:var(--color-state-idle)}
+.dot.ok{background:var(--color-state-ok)}
+.dot.bad{background:var(--color-state-bad)}
+.dot.warn{background:var(--color-state-warn)}
+.dot.busy{background:var(--color-state-busy)}
+.dot.idle{background:var(--color-state-idle)}
+/* 开关：linear: colors.surface-2 选中 = 抬升，primary 只用于「开启」这一有意状态 */
+.sw{
+  width:32px;height:18px;border-radius:var(--rounded-pill);background:var(--color-surface-3);
+  box-shadow:inset 0 0 0 1px var(--color-hairline);position:relative;cursor:pointer;flex:none;
+  border:0;display:inline-block;
+}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:var(--rounded-full);
+  background:var(--color-ink-tertiary);transition:left .12s ease,background .12s ease}
+.sw.on{background:var(--color-primary)}
+.sw.on::after{left:16px;background:var(--color-on-primary)}
+
+/* ============================================================================
+   4. 应用窗口（S 壳） —— linear: components.product-screenshot-card 的框法
+   ============================================================================ */
+.winframe{
+  display:flex;justify-content:center;overflow:hidden;
+  /* 占位宽高按缩放比显式给（transform 不改变布局盒），窄屏才不会横向溢出 */
+  width:var(--winframe-w,1120px);max-width:100%;height:var(--win-scaled-h,780px);margin:0 auto;
+}
+.win{
+  width:var(--win-w);height:var(--win-h);flex:none;position:relative;overflow:hidden;
+  background:var(--color-canvas);border-radius:var(--rounded-xl);
+  box-shadow:0 0 0 1px var(--color-hairline),var(--edge-highlight),0 24px 60px rgba(0,0,0,.6);
+  display:flex;flex-direction:column;
+  transform:scale(var(--win-scale));transform-origin:top center;
+}
+.tbar{
+  height:44px;flex:none;display:flex;align-items:center;gap:var(--spacing-xs);
+  padding:0 var(--spacing-sm);border-bottom:1px solid var(--color-hairline);
+  background:var(--color-canvas); /* linear: components.top-nav */
+}
+.brand{display:flex;align-items:center;gap:7px;font-family:var(--font-display);
+  font-size:var(--fs-card-title);font-weight:600;letter-spacing:var(--ls-card-title)}
+.brand .mk{width:20px;height:20px;border-radius:var(--rounded-sm);background:var(--color-primary);
+  color:var(--color-on-primary);font-size:11px;font-weight:600;display:grid;place-items:center;
+  font-family:var(--font-display)}
+
+.view{display:none;flex:1;min-height:0;overflow:hidden}
+.view.on{display:flex}
+
+/* ============================================================================
+   5. 通用表面
+   ============================================================================ */
+.sect{background:var(--color-surface-1);border-radius:var(--rounded-lg);box-shadow:var(--elev-1);overflow:hidden}
+.sect-h{
+  display:flex;align-items:center;gap:var(--spacing-xs);padding:9px var(--spacing-sm);
+  border-bottom:1px solid var(--color-hairline);font-size:var(--fs-body-sm);font-weight:500;
+  color:var(--color-ink);letter-spacing:-0.1px;background:var(--color-surface-2);
+}
+.sect-h .badge{margin-left:auto}
+.sect-h .badge + .badge{margin-left:0}
+.sect-b{padding:var(--spacing-sm);display:flex;flex-direction:column;gap:9px}
+.hint{font-size:var(--fs-caption);color:var(--color-ink-subtle);line-height:1.6}
+.kv{display:grid;grid-template-columns:74px 1fr;gap:6px var(--spacing-xs);font-size:var(--fs-body-sm);align-items:baseline}
+.kv .k{color:var(--color-ink-tertiary)}
+.kv .v{color:var(--color-ink-muted)}
+.f{display:flex;align-items:center;gap:var(--spacing-xs);font-size:var(--fs-body-sm)}
+.f > label{width:76px;flex:none;color:var(--color-ink-subtle);font-size:var(--fs-caption)}
+.f .grow{flex:1;min-width:0;display:flex;align-items:center;gap:var(--spacing-xs)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px var(--spacing-sm)}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px var(--spacing-sm)}
+.inp{
+  width:100%;height:var(--ctrl-h);padding:0 9px;font-family:var(--font-text);font-size:var(--fs-body-sm);
+  background:var(--color-surface-1);color:var(--color-ink);border:0;border-radius:var(--rounded-md);
+  box-shadow:0 0 0 1px var(--color-hairline); /* linear: components.text-input */
+}
+.inp.mono{font-family:var(--font-mono);font-size:11.5px}
+.inp::placeholder{color:var(--color-ink-tertiary)}
+.inp:focus{box-shadow:0 0 0 1px var(--color-hairline-strong),var(--elev-focus)} /* linear: text-input-focused */
+.sel{
+  height:var(--ctrl-h);padding:0 6px;font-family:var(--font-text);font-size:var(--fs-body-sm);
+  background:var(--color-surface-1);color:var(--color-ink);border:0;border-radius:var(--rounded-md);
+  box-shadow:0 0 0 1px var(--color-hairline);width:100%;
+}
+.seg{display:inline-flex;background:var(--color-canvas);border-radius:var(--rounded-pill);
+  box-shadow:0 0 0 1px var(--color-hairline);padding:2px;gap:2px} /* linear: components.pricing-tab-* */
+.seg button{
+  height:22px;padding:0 10px;border:0;border-radius:var(--rounded-pill);cursor:pointer;
+  background:transparent;color:var(--color-ink-subtle);font-family:var(--font-text);font-size:var(--fs-caption);
+}
+.seg button.on{background:var(--color-surface-2);color:var(--color-ink)}
+.chip{
+  display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border-radius:var(--rounded-sm);
+  background:var(--color-surface-2);box-shadow:0 0 0 1px var(--color-hairline);
+  font-size:var(--fs-caption);color:var(--color-ink-muted);
+}
+.chip .i{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.bar{height:5px;border-radius:var(--rounded-pill);background:var(--color-surface-3);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--color-ink-subtle);border-radius:var(--rounded-pill)}
+.bar i.warn{background:var(--color-state-warn)}
+.bar i.bad{background:var(--color-state-bad)}
+.bar i.ok{background:var(--color-state-ok)}
+.bar i.busy{background:var(--color-state-busy)}
+.prog{height:4px;border-radius:var(--rounded-pill);background:var(--color-surface-3);overflow:hidden}
+.prog i{display:block;height:100%;background:var(--color-primary)}
+.i{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.i.sm{width:12px;height:12px}
+.log{
+  font-family:var(--font-mono);font-size:11px;line-height:var(--lh-mono);color:var(--color-ink-muted);
+  background:var(--color-canvas);border-radius:var(--rounded-sm);box-shadow:0 0 0 1px var(--color-hairline);
+  padding:9px var(--spacing-xs);white-space:pre-wrap;word-break:break-all;max-height:210px;overflow:auto;
+}
+.kbd{
+  font-family:var(--font-mono);font-size:10.5px;padding:1px 5px;border-radius:var(--rounded-xs);
+  background:var(--color-surface-3);color:var(--color-ink-muted);box-shadow:0 0 0 1px var(--color-hairline)
+}
+
+/* ============================================================================
+   6. P1 运行
+   ============================================================================ */
+.run{flex:1;min-height:0;display:flex;gap:var(--spacing-sm);padding:var(--spacing-sm);align-items:stretch}
+.col-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:var(--spacing-xs);min-height:0}
+.scroll{flex:1;min-height:0;overflow:auto}
+.col-res{width:var(--col-res-w);flex:none;display:flex;flex-direction:column;gap:var(--spacing-xs);overflow:auto}
+
+/* B1 / B2 内联条 —— linear: components.cta-banner 的压缩形态 */
+.notice{display:none;align-items:center;gap:var(--spacing-xs);padding:9px var(--spacing-sm);
+  border-radius:var(--rounded-md);background:var(--color-surface-2);box-shadow:0 0 0 1px var(--color-hairline-strong);
+  font-size:var(--fs-body-sm);color:var(--color-ink-muted)}
+.notice.on{display:flex}
+.notice.b2{background:var(--color-state-warn-bg);box-shadow:0 0 0 1px #3d2f16}
+.notice.warn-i{color:var(--color-state-warn)}
+.notice b{color:var(--color-ink);font-weight:500}
+
+/* 用途卡：linear: components.feature-card（surface-1 + hairline + rounded.lg） */
+.cards{display:flex;flex-direction:column;gap:10px}
+.card{
+  background:var(--color-surface-1);border-radius:var(--rounded-lg);box-shadow:var(--elev-1);
+  display:flex;flex-direction:column;overflow:hidden;flex:none;
+}
+.card-bar{width:3px;flex:none;background:var(--color-state-idle)}
+.card-bar.ok{background:var(--color-state-ok)}
+.card-bar.warn{background:var(--color-state-warn)}
+.card-bar.bad{background:var(--color-state-bad)}
+.card-bar.busy{background:var(--color-state-busy)}
+.card-top{display:flex;align-items:center;min-height:var(--card-h)}
+.card-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;padding:var(--spacing-xs) var(--spacing-sm)}
+.card-line1{display:flex;align-items:center;gap:var(--spacing-xs);min-width:0}
+.card-name{font-family:var(--font-display);font-size:var(--fs-card-title);font-weight:var(--fw-card-title);
+  letter-spacing:var(--ls-card-title);color:var(--color-ink);white-space:nowrap}
+.card-meta{font-size:var(--fs-caption);color:var(--color-ink-subtle);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-act{display:flex;align-items:center;gap:6px;padding-right:var(--spacing-sm)}
+.card-err,.card-prog{
+  display:flex;align-items:center;gap:var(--spacing-xs);margin:0 var(--spacing-sm) var(--spacing-xs);
+  padding:7px 9px;border-radius:var(--rounded-sm);font-size:var(--fs-body-sm);
+}
+.card-err{background:var(--color-state-bad-bg);box-shadow:0 0 0 1px #3a1f22;color:#ffb4ae}
+.card-prog{background:var(--color-state-busy-bg);box-shadow:0 0 0 1px #2a2d4d;color:#c3c8f0}
+.card-err .btn,.card-prog .btn{margin-left:auto}
+.exp{display:none;flex-direction:column;border-top:1px solid var(--color-hairline);
+  padding:var(--spacing-xxs) var(--spacing-sm) var(--spacing-xs) 22px}
+.exp.on{display:flex}
+.mrow{display:flex;align-items:center;gap:var(--spacing-xs);height:29px;font-size:var(--fs-body-sm);min-width:0}
+.mrow .nm{font-family:var(--font-mono);font-size:11.5px;color:var(--color-ink);width:78px;flex:none}
+.mrow .port{font-family:var(--font-mono);font-size:11px;color:var(--color-ink-tertiary);width:44px;flex:none}
+.mrow .acts{margin-left:auto;display:flex;gap:5px;opacity:0;transition:opacity .12s ease}
+.mrow:hover .acts,.card-act .acts{opacity:1}
+.card:hover .mrow .acts{opacity:1}
+.note{padding:0 var(--spacing-sm) var(--spacing-xs) 22px;font-size:var(--fs-caption);color:var(--color-ink-tertiary)}
+
+/* 资源面 */
+.res-h{font-size:var(--fs-eyebrow);font-weight:var(--fw-eyebrow);letter-spacing:var(--ls-eyebrow);
+  text-transform:uppercase;color:var(--color-ink-tertiary);padding:2px 2px 0}
+.res-b{background:var(--color-surface-1);border-radius:var(--rounded-lg);box-shadow:var(--elev-1);
+  padding:var(--spacing-sm);display:flex;flex-direction:column;gap:9px}
+.metric{display:flex;flex-direction:column;gap:5px}
+.metric-top{display:flex;align-items:baseline;justify-content:space-between;font-size:var(--fs-body-sm);color:var(--color-ink-subtle)}
+.metric-top b{font-family:var(--font-mono);font-size:var(--fs-body);color:var(--color-ink);font-weight:400}
+.canlist{display:flex;flex-direction:column;gap:6px;font-size:var(--fs-body-sm);color:var(--color-ink-muted)}
+.canlist .no{color:var(--color-state-warn)}
+.canlist b{font-weight:500;color:var(--color-ink)}
+.occ{display:flex;align-items:center;gap:6px;font-size:var(--fs-body-sm)}
+.occ .n{font-family:var(--font-mono);font-size:11.5px;color:var(--color-ink);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.occ .v{font-family:var(--font-mono);font-size:11px;color:var(--color-ink-muted)}
+
+/* ============================================================================
+   7. P2 配置 / P2.1 服务编辑 / P3 设置
+   ============================================================================ */
+.cfg{flex:1;min-height:0;display:flex;flex-direction:column}
+.cfg-tabs{display:flex;align-items:center;gap:var(--spacing-xxs);padding:0 var(--spacing-sm);
+  border-bottom:1px solid var(--color-hairline);flex:none;height:36px}
+.cfg-tab{
+  height:26px;padding:0 10px;border:0;border-radius:var(--rounded-sm);cursor:pointer;background:transparent;
+  color:var(--color-ink-subtle);font-family:var(--font-text);font-size:var(--fs-body-sm);font-weight:500;
+}
+.cfg-tab:hover{color:var(--color-ink-muted);background:var(--color-surface-1)}
+.cfg-tab.on{color:var(--color-ink);background:var(--color-surface-2)} /* linear: 选中 = surface 抬升 */
+.cfg-tool{display:flex;align-items:center;gap:var(--spacing-xs);padding:var(--spacing-xs) var(--spacing-sm);flex:none;flex-wrap:wrap}
+.search{display:flex;align-items:center;gap:6px;height:var(--ctrl-h);padding:0 9px;border-radius:var(--rounded-md);
+  background:var(--color-surface-1);box-shadow:0 0 0 1px var(--color-hairline);width:230px}
+.search .i{width:13px;height:13px;color:var(--color-ink-tertiary)}
+.search input{flex:1;min-width:0;background:transparent;border:0;color:var(--color-ink);
+  font-family:var(--font-text);font-size:var(--fs-body-sm);outline:none}
+.search input::placeholder{color:var(--color-ink-tertiary)}
+/* 密集表格：linear: components.changelog-row 的行制延伸到产品内表格 */
+.tbl{width:100%;border-collapse:collapse;font-size:var(--fs-body-sm)}
+.tbl th{
+  text-align:left;font-weight:500;font-size:var(--fs-caption);color:var(--color-ink-tertiary);
+  padding:0 var(--spacing-xs);height:30px;border-bottom:1px solid var(--color-hairline);white-space:nowrap;
+  position:sticky;top:0;background:var(--color-canvas);z-index:1;
+}
+.tbl td{padding:0 var(--spacing-xs);height:var(--row-h);border-bottom:1px solid var(--color-hairline);
+  color:var(--color-ink-muted);vertical-align:middle}
+.tbl tbody tr:hover td{background:var(--color-surface-1)}
+.tbl td.nm{font-family:var(--font-mono);font-size:11.5px;color:var(--color-ink)}
+.tbl .path{font-family:var(--font-mono);font-size:11.5px;color:var(--color-ink)}
+.empty-hint{padding:var(--spacing-xs) var(--spacing-sm) var(--spacing-md);font-size:var(--fs-caption);color:var(--color-ink-tertiary);line-height:1.7}
+.gcard{background:var(--color-surface-1);border-radius:var(--rounded-lg);box-shadow:var(--elev-1);margin:0 var(--spacing-sm) 10px;overflow:hidden}
+.gcard-h{display:flex;align-items:center;gap:var(--spacing-xs);padding:9px var(--spacing-sm);
+  border-bottom:1px solid var(--color-hairline);background:var(--color-surface-2)}
+.gcard-h .nm{font-family:var(--font-display);font-size:var(--fs-card-title);font-weight:var(--fw-card-title);letter-spacing:var(--ls-card-title)}
+.gcard-b{padding:var(--spacing-xs) var(--spacing-sm);display:flex;flex-direction:column;gap:5px}
+.ord{display:flex;align-items:center;gap:var(--spacing-xs);height:30px;font-size:var(--fs-body-sm);
+  background:var(--color-canvas);border-radius:var(--rounded-sm);box-shadow:0 0 0 1px var(--color-hairline);
+  padding:0 9px;font-family:var(--font-mono)}
+.ord .idx{width:15px;flex:none;color:var(--color-ink-tertiary);font-size:11px;text-align:center}
+.ord .acts{margin-left:auto;display:flex;gap:4px}
+.ord .badge{font-family:var(--font-text)}
+
+.edit{flex:1;min-height:0;display:flex;flex-direction:column}
+.edit-h{display:flex;align-items:center;gap:var(--spacing-xs);padding:var(--spacing-xs) var(--spacing-sm);
+  border-bottom:1px solid var(--color-hairline);flex:none}
+.edit-nm{font-family:var(--font-display);font-size:var(--fs-headline);font-weight:600;letter-spacing:var(--ls-headline)}
+.edit-b{flex:1;min-height:0;display:flex}
+.edit-nav{
+  width:200px;flex:none;border-right:1px solid var(--color-hairline);padding:var(--spacing-xs);
+  display:flex;flex-direction:column;gap:2px;overflow:auto;
+}
+.nav-i{display:flex;align-items:center;gap:6px;height:29px;padding:0 9px;border-radius:var(--rounded-sm);
+  font-size:var(--fs-body-sm);color:var(--color-ink-muted);cursor:pointer}
+.nav-i:hover{background:var(--color-surface-1)}
+.nav-i.on{background:var(--color-surface-2);color:var(--color-ink)}
+.nav-i .st{margin-left:auto}
+.nav-sum{margin-top:var(--spacing-xs);padding:9px;border-radius:var(--rounded-sm);
+  background:var(--color-state-warn-bg);box-shadow:0 0 0 1px #3d2f16;font-size:var(--fs-caption);
+  color:#e5b95c;line-height:1.7;display:flex;flex-direction:column;gap:3px}
+.nav-sum b{font-family:var(--font-mono);color:#ffd88a}
+.edit-form{flex:1;min-width:0;overflow:auto;padding:var(--spacing-sm);display:flex;flex-direction:column;gap:10px}
+
+.set{flex:1;min-height:0;overflow:auto;padding:var(--spacing-sm);display:flex;flex-direction:column;gap:10px}
+.tl{display:flex;align-items:center;gap:var(--spacing-xs);height:30px;font-size:var(--fs-body-sm);color:var(--color-ink-muted)}
+.tl .t{font-family:var(--font-mono);font-size:11px;color:var(--color-ink-subtle);width:92px;flex:none}
+
+/* ============================================================================
+   8. 遮罩 / 抽屉 / 模态
+   ============================================================================ */
+.scrim{
+  position:absolute;inset:0;background:var(--color-semantic-overlay);opacity:0;pointer-events:none;
+  transition:opacity .14s ease;z-index:40;
+}
+.scrim.on{opacity:.62;pointer-events:auto}
+/* 层容器类名刻意不叫 mw/dialog：验收探针以 /modal|mw|dialog/i 判定「浮层是否出现」，
+   若容器与内容都命中该正则，一次打开会被数成两个模态。内容层才是唯一的 modal 标记。 */
+.ol{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:60;padding:var(--spacing-md)}
+.ol.on{display:flex}
+.modal{
+  background:var(--color-surface-1);border-radius:var(--rounded-lg);box-shadow:var(--elev-2),var(--elev-3);
+  width:620px;max-width:100%;max-height:100%;display:flex;flex-direction:column;overflow:hidden;
+}
+.modal.narrow{width:460px}
+.modal.mid{width:560px}
+.modal.asset{width:520px}
+.m-h{display:flex;align-items:center;gap:var(--spacing-xs);padding:var(--spacing-sm) var(--spacing-md);
+  border-bottom:1px solid var(--color-hairline);background:var(--color-surface-2)}
+.m-h .ttl{font-family:var(--font-display);font-size:var(--fs-headline);font-weight:var(--fw-headline);
+  letter-spacing:var(--ls-headline);color:var(--color-ink)}
+.m-b{padding:var(--spacing-md);display:flex;flex-direction:column;gap:var(--spacing-sm);overflow:auto}
+.m-f{display:flex;align-items:center;gap:var(--spacing-xs);padding:var(--spacing-sm) var(--spacing-md);
+  border-top:1px solid var(--color-hairline);background:var(--color-surface-2)}
+.fam{border-radius:var(--rounded-md);box-shadow:0 0 0 1px var(--color-hairline);overflow:hidden}
+.fam-h{display:flex;align-items:center;gap:7px;padding:7px var(--spacing-sm);font-size:var(--fs-body-sm);
+  background:var(--color-surface-2);color:var(--color-ink)}
+.fam-h.pass{background:var(--color-canvas);color:var(--color-ink-subtle)}
+.fam-b{padding:9px var(--spacing-sm);display:flex;flex-direction:column;gap:7px;background:var(--color-canvas)}
+.fam-b .row{display:flex;align-items:center;gap:var(--spacing-xs);font-size:var(--fs-body-sm);color:var(--color-ink-muted);line-height:1.6}
+.fam-b .row b{color:var(--color-ink);font-weight:500}
+.fam-b .acts{margin-left:auto;display:flex;gap:5px;flex:none}
+
+/* D1 抽屉 —— 打开不离开当前页 */
+.drawer{
+  position:absolute;top:0;right:0;bottom:0;width:var(--drawer-w);background:var(--color-surface-1);
+  box-shadow:-1px 0 0 var(--color-hairline);display:flex;flex-direction:column;z-index:50;
+  transform:translateX(100%);transition:transform .16s ease;
+}
+.drawer.on{transform:none}
+.dr-h{display:flex;align-items:center;gap:var(--spacing-xs);padding:var(--spacing-sm) var(--spacing-md);
+  border-bottom:1px solid var(--color-hairline);background:var(--color-surface-2);flex:none}
+.dr-b{flex:1;min-height:0;overflow:auto;padding:var(--spacing-sm);display:flex;flex-direction:column;gap:10px}
+.dr-f{display:flex;align-items:center;gap:6px;padding:var(--spacing-xs) var(--spacing-sm);
+  border-top:1px solid var(--color-hairline);background:var(--color-surface-2);flex:none}
+
+/* ============================================================================
+   9. Toast / 标注层
+   ============================================================================ */
+.toasts{position:absolute;right:var(--spacing-sm);bottom:var(--spacing-sm);width:var(--toast-w);
+  display:flex;flex-direction:column;gap:6px;z-index:80;pointer-events:none}
+.toast{
+  display:flex;align-items:flex-start;gap:7px;padding:9px 10px;border-radius:var(--rounded-md);
+  background:var(--color-surface-2);box-shadow:var(--elev-2),0 6px 18px rgba(0,0,0,.5);
+  font-size:var(--fs-body-sm);color:var(--color-ink-muted);pointer-events:auto;
+}
+.toast.ok{box-shadow:0 0 0 1px #24402c,0 6px 18px rgba(0,0,0,.5)}
+.toast.info{box-shadow:0 0 0 1px #2a2d4d,0 6px 18px rgba(0,0,0,.5)}
+.toast.bad{box-shadow:0 0 0 1px #43222a,0 6px 18px rgba(0,0,0,.5)}
+.toast .x{margin-left:auto;background:none;border:0;color:var(--color-ink-tertiary);cursor:pointer;font-size:13px;line-height:1}
+
+.annot{
+  width:344px;flex:none;align-self:stretch;position:sticky;top:var(--spacing-md);
+  background:var(--color-surface-1);border-radius:var(--rounded-lg);box-shadow:var(--elev-1),var(--edge-highlight);
+  display:flex;flex-direction:column;overflow:hidden;max-height:calc(100vh - 32px);
+}
+.an-h{display:flex;align-items:center;gap:var(--spacing-xs);padding:9px var(--spacing-sm);
+  border-bottom:1px solid var(--color-hairline);background:var(--color-surface-2);
+  font-size:var(--fs-body-sm);font-weight:500}
+.an-b{padding:var(--spacing-sm);overflow:auto;display:flex;flex-direction:column;gap:10px}
+.an-k{font-size:var(--fs-eyebrow);font-weight:var(--fw-eyebrow);letter-spacing:var(--ls-eyebrow);
+  text-transform:uppercase;color:var(--color-ink-tertiary);margin-bottom:3px}
+.an-v{font-size:var(--fs-body-sm);color:var(--color-ink-muted);line-height:1.65}
+.an-v.dim{color:var(--color-ink-subtle)}
+.an-rel{display:flex;flex-wrap:wrap;gap:5px}
+.help{font-size:var(--fs-body-sm);color:var(--color-ink-subtle);line-height:1.85}
+.help b{color:var(--color-ink-muted);font-weight:500}
+/* 标注模式下的关联高亮：lavender 只作焦点/强调，不做装饰性填充 */
+body.spec [data-fn]{cursor:crosshair}
+body.spec [data-fn]:hover{box-shadow:0 0 0 1px var(--color-primary),var(--elev-focus)}
+body.spec .rel{box-shadow:0 0 0 1px var(--color-primary-focus),var(--elev-focus)}
+body.spec .pin{box-shadow:0 0 0 2px var(--color-primary),var(--elev-focus)}
+.jump{
+  height:22px;padding:0 8px;border:0;border-radius:var(--rounded-sm);cursor:pointer;
+  background:var(--color-state-busy-bg);color:var(--color-state-busy);
+  font-family:var(--font-text);font-size:var(--fs-caption);
+}
+.jump:hover{box-shadow:0 0 0 1px var(--color-primary-focus)}
+
+/* ============================================================================
+   10. 响应式：linear: ## Responsive Behavior（断点 1280 / 1024 / 768）
+   被设计的是固定 1120×780 的真实窗口，它只能在视口内整体缩放，不能让内容重排——
+   所以每一档断点同时给出「缩放比 + 缩放后的占位宽高」。transform 不改变布局盒，
+   占位宽高必须显式给，否则窄屏会出现横向溢出（这条是实测修出来的）。
+   ============================================================================ */
+@media (max-width:1440px){
+  :root{--win-scale:.98;--winframe-w:1098px;--win-scaled-h:765px}
+}
+@media (max-width:1300px){
+  :root{--win-scale:.92;--winframe-w:1031px;--win-scaled-h:718px}
+  .annot{width:300px}
+}
+@media (max-width:1180px){
+  :root{--win-scale:.84;--winframe-w:941px;--win-scaled-h:656px}
+  .shell{gap:var(--spacing-sm);padding:var(--spacing-sm)}
+  .annot{width:280px}
+}
+@media (max-width:1024px){
+  /* linear: 卡片栅格 3-up → 2-up 的同构做法：并排列收敛为单列 */
+  :root{--win-scale:.74;--winframe-w:829px;--win-scaled-h:578px}
+  .shell{flex-direction:column}
+  .annot{width:100%;position:static;max-height:none}
+}
+@media (max-width:880px){
+  :root{--win-scale:.60;--winframe-w:672px;--win-scaled-h:468px}
+}
+@media (max-width:768px){
+  /* linear: ## Responsive Behavior · Mobile-Lg —— 导航折叠、栅格单列 */
+  :root{--win-scale:.50;--winframe-w:560px;--win-scaled-h:390px}
+  .grid3,.grid2{grid-template-columns:1fr}
+  .tools{gap:var(--spacing-xs)}
+}
+@media (max-width:620px){
+  :root{--win-scale:.40;--winframe-w:448px;--win-scaled-h:312px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ 图标精灵（线性风格：1.7px 描边、圆角端点） ============ -->
+<svg style="display:none" aria-hidden="true">
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M6 3.5 20 12 6 20.5z"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5"/></symbol>
+  <symbol id="i-restart" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></symbol>
+  <symbol id="i-log" viewBox="0 0 24 24"><path d="M4 17l5-5-5-5M12 19h8"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/><circle cx="5" cy="12" r="1.3"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5zM3 8l9 5 9-5"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></symbol>
+  <symbol id="i-gpu" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="9" cy="12" r="3"/><path d="M15 10h4M15 14h4"/></symbol>
+  <symbol id="i-disk" viewBox="0 0 24 24"><path d="M22 12H2M5.5 5h13l3.5 7v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z"/><path d="M6 16h.01M10 16h.01"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+  <symbol id="i-down2" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5zM3 13l9 5 9-5M3 17l9 5 9-5"/></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v9M6.3 6.3a9 9 0 1 0 11.4 0"/></symbol>
+  <symbol id="i-tray" viewBox="0 0 24 24"><path d="M4 4h16v11H4zM2 19h20M8 15h8"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 9a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7M10.5 20a1.8 1.8 0 0 0 3 0"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 24 24"><path d="M20.6 13.4 12 22l-9-9V3h10z"/><circle cx="7.5" cy="7.5" r="1.4"/></symbol>
+</svg>
+
+<div class="shell">
+  <!-- ==================== 预览外壳 ==================== -->
+  <div class="stage">
+    <div class="stage-head">
+      <div class="stage-title"><span class="mark">服</span>服务中枢 · 高精度可交互预览
+        <span class="badge info" style="margin-left:6px">Linear 设计语言</span>
+        <span class="badge plain" data-fn="场景与数据来源标注：真实状态取本机实时数据；排障与切换两场景是合成演示——此刻真实情况是 OpenViking 组 4/4 可用、其余未运行，且 exclusivePresets 为空数组（没有任何组被标记独占）。演示场景里出现了「聊天组标记独占」，那属于演示注入，不是当前真实配置。" data-cond="恒显示">三场景 · 其中两个为合成演示</span>
+      </div>
+      <div class="tools">
+        <div class="grp">
+          <span class="lbl">场景</span>
+          <button class="tb on" data-sc="real" data-fn="真实状态：本机此刻的真实快照。OpenViking 组 4/4 可用（vlm/embedding/intent/ov-server 都在跑），其余 4 个服务未运行，没有任何组标独占。" data-cond="恒可用">真实状态</button>
+          <button class="tb" data-sc="trouble" data-fn="排障演示（合成）：把 ov-server 置为「失败 · 就绪超时」，用于演示处置层——归因分两维（族 = 依赖，阶段 = 就绪超时）、日志尾部、运行记录、按归因给出的修正动作。" data-cond="恒可用">排障演示</button>
+          <button class="tb" data-sc="switch" data-fn="切换演示（合成）：OpenViking 组停止中 2/4、聊天组切换中。演示的是链路 9 的事务过程：停旧档 → 等显存释放 8.1 GB → 起新档 → 逐个等就绪。" data-cond="恒可用">切换演示</button>
+        </div>
+        <div class="grp">
+          <span class="lbl">视图</span>
+          <button class="tb on" data-go="run" data-fn="运行态（默认房间）：主列只有用途卡，右侧是资源面。它回答「我要用的那件事现在能不能用」。" data-cond="恒可用">运行</button>
+          <button class="tb" data-go="config" data-fn="配置态：服务清单 / 预设组 / 素材 三个页签。它是「施工房间」——定义视角，不掺实时运行状态。" data-cond="恒可用">配置</button>
+          <button class="tb" data-go="edit" data-fn="服务编辑（二级页）：六段定义表单 + 左段导航与校验摘要。只从配置态进入——编辑是施工，观察是使用。" data-cond="恒可用">服务编辑</button>
+          <button class="tb" data-go="settings" data-fn="设置：能力（llama 路径 / 扫描根 / 模型目录）、运行（重启上限 / 告警阈值 / 随登录自启）、数据（配置与日志位置）、配置快照回滚。" data-cond="恒可用">设置</button>
+        </div>
+        <div class="grp">
+          <span class="lbl">浮层</span>
+          <button class="tb" data-modal="m-pre">预检</button>
+          <button class="tb" data-modal="m-danger">危险确认</button>
+          <button class="tb" data-modal="m-asset">素材获取</button>
+          <button class="tb" data-modal="m-detect">探测</button>
+          <button class="tb" data-modal="m-group">组编辑</button>
+          <button class="tb" data-drawer="ov-server">服务抽屉</button>
+        </div>
+        <div class="grp">
+          <button class="tb" data-notice data-fn="模拟外部变更：等价于你在编辑器里改了 services.json（本例是 reranker 的端口 11438 → 11441）。它只产生提示条，不自动应用——应用前先给差异清单。" data-cond="恒可用">模拟外部变更</button>
+          <button class="tb" data-tray data-fn="托盘快启（链路 11）：从系统托盘菜单直接启用某个用途，不打开主界面。菜单给足信息（哪个可用、哪个在跑），判据正是「我没有被迫打开窗口」。" data-cond="恒可用">托盘快启</button>
+          <button class="tb" data-spec data-fn="标注模式：打开后悬停任意控件，右侧显示该控件的功能 / 可用条件 / 关联控件，并高亮关联锚点；点击固定说明，Esc 取消。" data-cond="恒可用">标注模式</button>
+        </div>
+      </div>
+      <div class="stage-sub">数据取自本机真实配置与实时状态（RTX 3090 24 GB · 已用 9623 MiB；vlm / embedding / intent / ov-server 正在运行，PID 与显存为实测或推算值）。被设计的应用窗口按真实尺寸 1120 × 780 渲染。排障与切换两场景为合成演示，已在场景按钮与卡片上标注。</div>
+    </div>
+
+    <div class="winframe">
+    <!-- ==================== 应用窗口 S ==================== -->
+    <div class="win" id="win">
+      <div class="tbar">
+        <span class="brand"><span class="mk">服</span>服务中枢</span>
+        <span class="badge plain" data-fn="本机单用户模式：没有账号、没有权限、没有远程。所有数据都在本机。" data-cond="恒显示">本机单用户</span>
+        <span class="sp"></span>
+        <button class="btn ghost sm" id="navBack" style="display:none" data-go="run" data-fn="返回运行态。运行态是默认房间，配置态与设置态是明确进出的房间。" data-cond="不在运行态时">← 返回运行态</button>
+        <button class="btn ghost sm" data-go="config" data-fn="进入配置态：一个独立的房间，专做服务与预设组的新增/编辑/删除、素材与全局设置。" data-cond="恒可用" data-rel="v-config">配置</button>
+        <button class="btn ghost sm" data-go="settings" data-fn="打开全局设置：能力 / 运行 / 数据 / 配置快照回滚。" data-cond="恒可用" data-rel="v-settings">设置</button>
+        <button class="btn ghost sm" data-modal="m-danger" data-fn="退出应用：有服务在运行时先确认并列出是哪几个，由你决定「同时停止」还是「保持后台运行」。关窗只是隐藏到托盘（服务继续跑），退出才需要问服务怎么办。" data-cond="恒可用">退出</button>
+      </div>
+
+      <!-- ---------- P1 运行 ---------- -->
+      <section class="view on" id="v-run" data-fn="P1 运行（默认页）：主列只有用途卡，右侧资源面固定 300px。一屏放得下 5 个用途，第 6 个开始滚动。" data-cond="默认房间">
+        <div class="run">
+          <div class="col-main">
+            <!-- B1 外部变更内联条 -->
+            <div class="notice" id="notice" data-fn="外部配置变更提示条（链路 14 / 闭环 C15）：应用前先给差异清单，应用时只重启「参数确实变化且正在运行」的服务——本例 reranker 未运行，因此不会重启任何东西。忽略不等于永久静音。" data-cond="仅在外部修改被检测到时出现" data-rel="tab-svc">
+              <svg class="i sm" style="color:var(--color-state-warn)"><use href="#i-alert"/></svg>
+              <span>检测到 services.json 被外部修改：<b class="mono">reranker</b> 的端口 <span class="mono">11438</span> → <span class="mono">11441</span></span>
+              <button class="btn sm" data-toast="ok|已应用变更 · 将重启 0 个服务（reranker 未运行）" data-fn="先看差异清单再决定是否应用。应用时只重启「参数确实变化且正在运行」的服务，避免未变的服务被无故重启。" data-cond="仅在提示条出现时">应用</button>
+              <button class="btn sm ghost" data-ignore data-fn="忽略本次提示。下次外部再变更仍会提示——不能把一次忽略当作永久静音。" data-cond="恒可用">忽略</button>
+            </div>
+            <!-- B2 资源告警内联条 -->
+            <div class="notice b2" id="resAlert">
+              <svg class="i sm warn-i"><use href="#i-alert"/></svg>
+              <span class="warn-i">资源告警：显存已用 <b>9.4 / 24 GB（39%）</b>，告警阈值 90%——当前未超阈。超阈时本条只提示并跳到占用者，<b>不自动抢占</b>。</span>
+              <button class="btn sm" data-drawer="vlm" data-fn="跳到占用者：资源告警不自动抢占，只把你送到占用者面前，由你决定停谁。" data-cond="出现告警时" data-rel="col-res">看占用者</button>
+            </div>
+            <div class="scroll"><div class="cards" id="cards"></div></div>
+          </div>
+          <aside class="col-res" id="col-res"></aside>
+        </div>
+      </section>
+
+      <!-- ---------- P2 配置 ---------- -->
+      <section class="view" id="v-config" data-fn="P2 配置：一级页，服务清单 / 预设组 / 素材 三个页签。主列只有一种对象，避免两种主体互相稀释注意力。" data-cond="从顶栏进入">
+        <div class="cfg">
+          <div class="cfg-tabs">
+            <button class="cfg-tab on" data-tab="svc" data-fn="服务清单：只显示定义视角——名称 / 形态 / 暴露 / 归属组 / 状态位 / 最近结果。刻意不显示实时运行状态，那是运行态的职责。" data-cond="恒可用">服务</button>
+            <button class="cfg-tab" data-tab="grp" data-fn="预设组：一个组就是「一个用途的实现」。成员顺序即启动与停止顺序——ov-server 必须先等 vlm/embedding/intent 就绪才连得上，所以顺序不是装饰。" data-cond="恒可用">预设组</button>
+            <button class="cfg-tab" data-tab="asset" data-fn="素材：模型文件、镜像、依赖包。素材是被引用型（同一个 GGUF 可被多个服务引用），删除前必须检查引用计数。" data-cond="恒可用">素材</button>
+          </div>
+
+          <div id="tab-svc" style="flex:1;display:flex;flex-direction:column;min-height:0">
+            <div class="cfg-tool">
+              <button class="btn primary" data-modal="m-detect" data-fn="新建服务：第一步是探测——你给一个目录、一个文件或一段命令，系统先判断它是什么，再让你确认，而不是先让你从三个单选框里选。" data-cond="恒可用" data-rel="v-edit">＋ 新建服务</button>
+              <div class="search"><svg class="i"><use href="#i-search"/></svg><input class="inp" style="box-shadow:none;background:transparent;height:auto;padding:0" placeholder="搜索 名称 / 端口 / 别名" data-fn="搜索与过滤服务清单（行为 5，无副作用）：按名称、端口、别名过滤。纯观察行为不产生任何 Toast。" data-cond="恒可用"></div>
+              <div class="seg" data-fn="按形态过滤：docker 应用 / 源代码部署 / 模型服务。三种形态的准备动作不同，所以过滤也是找「准备动作」的入口。" data-cond="恒可用"><button class="on">全部</button><button>docker 应用</button><button>源代码部署</button><button>模型服务</button></div>
+              <div class="seg" data-fn="按状态位过滤：已启用 / 未准备。它回答「哪份配置还跑不起来」。" data-cond="恒可用"><button class="on">全部</button><button>已启用</button><button>未准备</button></div>
+              <span class="sp"></span>
+              <span class="badge plain">8 个服务 · 57.7 GB 素材</span>
+            </div>
+            <div class="scroll">
+              <table class="tbl">
+                <thead><tr><th style="width:130px">服务</th><th style="width:88px">形态</th><th>暴露</th><th style="width:112px">归属组</th><th style="width:186px">状态</th><th style="width:128px">最近一次</th><th style="width:40px"></th></tr></thead>
+                <tbody id="svcRows"></tbody>
+              </table>
+              <div class="empty-hint">行内不放启用与自启开关——它们有副作用（影响组与自启），放在服务编辑页更安全，也让清单保持定义视角。行尾 ⋯ 里是：编辑 / 复制 / 删除 / 准备 / 试运行 / 运行记录 / 打开所在目录 / 导出 / 加入组。（复制、导出、打开目录属无副作用行为，不产生确认。）</div>
+            </div>
+          </div>
+
+          <div id="tab-grp" style="flex:1;display:none;flex-direction:column;min-height:0">
+            <div class="cfg-tool">
+              <button class="btn primary" data-modal="m-group" data-fn="新建预设组：给它一个用途名（OpenViking / 聊天），然后选成员、排顺序、决定是否独占。" data-cond="恒可用">＋ 新建预设组</button>
+              <span class="sp"></span>
+              <span class="badge plain">2 个组 · 3 个未分组服务</span>
+            </div>
+            <div class="scroll" id="grpList"></div>
+          </div>
+
+          <div id="tab-asset" style="flex:1;display:none;flex-direction:column;min-height:0">
+            <div class="cfg-tool">
+              <button class="btn primary" data-modal="m-asset" data-fn="获取素材：按名称在镜像站搜索选型，或粘贴直链；可填 SHA256 强制校验。下载不阻塞界面，进度可取消。" data-cond="恒可用">＋ 获取素材</button>
+              <div class="seg" data-fn="素材类型过滤：模型文件 / 容器镜像。它们的校验方式不同。" data-cond="恒可用"><button class="on">全部</button><button>模型文件</button><button>容器镜像</button></div>
+              <span class="sp"></span>
+              <span class="badge warn">9 个 GGUF · 57.7 GB · 3 个未被引用</span>
+            </div>
+            <div class="scroll">
+              <table class="tbl">
+                <thead><tr><th style="width:300px">素材</th><th style="width:84px">类型</th><th style="width:86px">大小</th><th style="width:96px">校验</th><th style="width:128px">被引用</th><th></th></tr></thead>
+                <tbody id="assetRows"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- P2.1 服务编辑 ---------- -->
+      <section class="view" id="v-edit" data-fn="P2.1 服务编辑（二级页）：六段定义表单。左栏是段导航 + 校验摘要——表单很长，左栏让「跳到某段」和「哪里有问题」同时可见。" data-cond="仅从配置态进入">
+        <div class="edit">
+          <div class="edit-h">
+            <button class="btn ghost sm" data-go="config" data-fn="返回配置态的服务清单。编辑页只从配置态进入——编辑是施工，观察是使用，共用容器会互相牵制。" data-cond="恒可用">← 返回配置</button>
+            <span class="edit-nm">ov-server</span>
+            <span class="badge info">源代码部署</span>
+            <span class="badge ok">已准备</span>
+            <span class="badge ok">已启用</span>
+            <span class="sp"></span>
+            <button class="btn" data-toast="ok|试运行通过 · 就绪耗时 1.8s · 实测显存 320 MB" data-fn="试运行：起一个临时实例（自动挑空闲端口、不写配置），确认能就绪。这是配置闭环的判据——不是「保存成功」。通过后可转为持久服务，并沿用实测值回填账本。" data-cond="字段校验通过" data-rel="sec-req">试运行</button>
+            <button class="btn primary" data-toast="ok|已保存 · ov-server（运行中，已停 → 改 → 起）" data-fn="保存：若该服务正在运行，会先停 → 改 → 再起（等旧进程真正退出），避免出现「界面显示新参数、实际跑旧进程」。" data-cond="表单有改动且校验通过">保存</button>
+          </div>
+          <div class="edit-b">
+            <nav class="edit-nav">
+              <div class="nav-i on" data-jump-to="sec-form" data-fn="段导航 ① 形态：决定其余五段的字段。改形态会清空不兼容字段，因此会先确认。" data-cond="恒可用">① 形态<span class="st badge ok">✓</span></div>
+              <div class="nav-i" data-jump-to="sec-prep" data-fn="段导航 ② 准备：拉镜像 / 构建 / 装依赖 / 取模型。长耗时、可取消，失败只改变「已准备」状态位。" data-cond="恒可用">② 准备<span class="st badge ok">✓</span></div>
+              <div class="nav-i" data-jump-to="sec-launch" data-fn="段导航 ③ 启动：可执行文件 / 参数 / 工作目录 / 环境变量。" data-cond="恒可用">③ 启动<span class="st badge ok">✓</span></div>
+              <div class="nav-i" data-jump-to="sec-ready" data-fn="段导航 ④ 暴露与就绪：端口与就绪判定。「进程起来了」不等于「能力可用」——判定决定界面显示「就绪中」还是「运行中」。" data-cond="恒可用">④ 暴露与就绪<span class="st badge ok">✓</span></div>
+              <div class="nav-i" data-jump-to="sec-req" data-fn="段导航 ⑤ 需求：预检的四族条件（依赖 / 环境 / 占用 / 资源），每条标注来源。" data-cond="恒可用">⑤ 需求<span class="st badge warn">1</span></div>
+              <div class="nav-i" data-jump-to="sec-policy" data-fn="段导航 ⑥ 策略：启用 / 随应用启动 / 归属组 / 独占。策略不混进每次操作。" data-cond="恒可用">⑥ 策略<span class="st badge ok">✓</span></div>
+              <div class="nav-sum" data-fn="校验摘要：问题项可点，直接跳到该段并聚焦字段。这是链路 2 分支 C（参数错误 → 编辑服务）依赖的机制。" data-cond="有校验问题时显示">
+                <div>校验：5 项通过 · 1 项待处理</div>
+                <div><svg class="i sm" style="vertical-align:-2px"><use href="#i-alert"/></svg> 依赖 <b>intent</b> 尚未就绪（当前已运行，将按序等待）</div>
+              </div>
+            </nav>
+            <div class="edit-form">
+              <div class="sect" id="sec-form" data-fn="① 形态：docker 应用 / 源代码部署 / 模型服务。新建时由探测预选。它决定其余五段出现哪些字段。" data-cond="恒可用">
+                <div class="sect-h">① 形态<span class="badge plain">决定其余五段的字段</span></div>
+                <div class="sect-b">
+                  <div class="seg"><button>docker 应用</button><button class="on">源代码部署</button><button>模型服务</button></div>
+                  <div class="hint">新建时由探测预选；改形态会清空不兼容的字段，因此会先确认。</div>
+                </div>
+              </div>
+
+              <div class="sect" id="sec-prep" data-fn="② 准备：执行准备命令并显示进度，可取消。失败不会改变运行状态（此时还没启动），只改变「已准备」这个状态位。三类形态的准备动作不同：docker 拉/构建镜像、源码装依赖、模型服务取模型并校验。" data-cond="形态匹配">
+                <div class="sect-h">② 准备<span class="badge ok">已就绪 · 上次 9/23 07:21</span></div>
+                <div class="sect-b">
+                  <div class="f"><label>准备命令</label><span class="grow"><input class="inp mono" value="D:\Python\Python312\python.exe -m pip install -r requirements.txt" readonly></span></div>
+                  <div class="f"><label>超时</label><input class="inp mono" style="width:74px" value="600" readonly><span class="hint">秒</span>
+                    <span class="sp"></span>
+                    <button class="btn" data-toast="ok|准备完成 · 依赖已就位" data-fn="立即准备：执行准备命令并显示进度，可取消。失败不改变运行状态，只改变「已准备」状态位。" data-cond="形态匹配" data-rel="tab-asset">立即准备</button>
+                  </div>
+                  <div class="hint">这是「源代码部署」真正落地的地方——没有它，装依赖、建虚拟环境都得你在应用外自己做，那就不叫部署。</div>
+                </div>
+              </div>
+
+              <div class="sect" id="sec-launch" data-fn="③ 启动：可执行文件 / 参数 / 工作目录 / 环境变量。密钥类变量支持 {{env:NAME}} 引用，不明文落盘。" data-cond="恒可用">
+                <div class="sect-h">③ 启动</div>
+                <div class="sect-b">
+                  <div class="f"><label>可执行文件</label><span class="grow"><input class="inp mono" value="D:\Python\Python312\python.exe" readonly></span><button class="btn sm ghost" data-toast="info|已复制路径" data-fn="复制路径（行为 37，无副作用）：不产生确认噪音，只给一条 Toast。" data-cond="恒可用">复制</button></div>
+                  <div class="f"><label>参数</label><span class="grow"><input class="inp mono" value="D:\deepseek\ov-data\run-server.py --config D:\deepseek\ov-data\ov.conf" readonly></span><button class="btn sm ghost" data-toast="info|已复制参数" data-cond="恒可用" data-fn="复制参数（无副作用）。">复制</button></div>
+                  <div class="grid2">
+                    <div class="f"><label>工作目录</label><span class="grow"><input class="inp mono" value="D:\deepseek\ov-data" readonly></span></div>
+                    <div class="f"><label>环境变量</label><span class="grow"><input class="inp mono" value="PYTHONUNBUFFERED=1" readonly></span></div>
+                  </div>
+                  <div class="hint">密钥类变量支持写成 <span class="mono">{{env:NAME}}</span> 引用，不明文落盘。</div>
+                </div>
+              </div>
+
+              <div class="sect" id="sec-ready" data-fn="④ 暴露与就绪：端口 + 就绪判定 + 判定路径。「进程起来了」不等于「能力可用」——判定决定界面上显示「就绪中…」还是「运行中」，这是最危险的一类失败。" data-cond="恒可用">
+                <div class="sect-h">④ 暴露与就绪</div>
+                <div class="sect-b">
+                  <div class="grid3">
+                    <div class="f"><label>端口</label><span class="grow"><input class="inp mono" value="1933" readonly></span></div>
+                    <div class="f"><label>判定</label><span class="grow"><select class="sel"><option>HTTP 状态码 / 响应体</option><option>端口可连接</option><option>OpenAI 模型列表</option><option>不检查</option></select></span></div>
+                    <div class="f"><label>路径</label><span class="grow"><input class="inp mono" value="/healthz" readonly></span></div>
+                  </div>
+                  <div class="hint">「进程起来了」不等于「能力可用」——就绪判定是预检里唯一无法从配置推断的一项。</div>
+                </div>
+              </div>
+
+              <div class="sect" id="sec-req" data-fn="⑤ 需求：预检的四族条件。每条标注来源——推算（模型服务可由 GGUF + 参数算出）、读取（compose 声明的 ports / mem_limit）、声明（源码启动只能由你填）。三者混用同一视觉，比不做预检更危险。" data-cond="恒可用">
+                <div class="sect-h">⑤ 需求<span class="badge plain">预检的四族条件</span></div>
+                <div class="sect-b">
+                  <div class="kv">
+                    <span class="k">环境</span><span class="v">python 3.12 · run-server.py · ov.conf</span>
+                    <span class="k">资源</span><span class="v">内存 512 MB <span class="badge warn">声明</span> · 显存 320 MB <span class="badge warn">估算</span></span>
+                    <span class="k">占用</span><span class="v">端口 1933</span>
+                    <span class="k">依赖</span><span class="v">embedding <span class="badge ok">已就绪</span> · intent <span class="badge warn">启动中</span></span>
+                  </div>
+                  <div class="hint">来源标注是一等内容：<b>推算</b> / <b>读取</b> / <b>声明</b>。它决定你信不信这个数字。</div>
+                </div>
+              </div>
+
+              <div class="sect" id="sec-policy" data-fn="⑥ 策略：启用 / 随应用启动 / 归属组 / 独占。启用是配置上是否允许被启动；「正在运行」是另一个状态位——两者必须分开表达，否则分不清「我启用了它」和「它正在跑」。" data-cond="恒可用">
+                <div class="sect-h">⑥ 策略</div>
+                <div class="sect-b">
+                  <div class="grid2">
+                    <div class="f"><label>启用</label><button class="sw on" data-fn="enabled：配置上是否允许被启动。它与「正在运行」是两个不同的状态位。" data-cond="恒可用"></button></div>
+                    <div class="f"><label>随应用启动</label><button class="sw" data-fn="autostart：随应用启动自动拉起（应用本身随登录自启）。它属于策略，不该混进每次操作。" data-cond="恒可用"></button></div>
+                    <div class="f"><label>归属组</label><span class="grow"><span class="chip">OpenViking 组 <svg class="i sm" style="width:10px;height:10px"><use href="#i-x"/></svg></span> <button class="btn sm ghost" data-modal="m-group" data-fn="加入组：一个服务可以属于多个组；停组时若某成员正被其它运行中的组使用，会先提示。" data-cond="恒可用">＋ 加入组</button></span></div>
+                    <div class="f"><label>独占</label><button class="sw" data-fn="独占：启动本组时若其它独占组在运行，先弹仲裁——列出将停止的组与预计释放的资源，由你确认。它让「先停旧档、再起新档」这个事务变得显式。" data-cond="恒可用"></button></div>
+                  </div>
+                  <div class="hint">一个服务可以属于多个组；停组时若某成员正被其它运行中的组使用，会先提示共用者（闭环 C11）。</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- P3 设置 ---------- -->
+      <section class="view" id="v-settings" data-fn="P3 设置：能力 / 运行 / 数据 / 配置快照。判据是「重启应用后仍成立」。" data-cond="从顶栏进入">
+        <div class="set">
+          <div class="sect">
+            <div class="sect-h">能力</div>
+            <div class="sect-b">
+              <div class="f"><label>llama 运行时</label><span class="grow"><input class="inp mono" value="D:\LLM Model\llama.cpp\runtime\llama-server.exe" readonly></span></div>
+              <div class="f"><label>模型扫描根</label><span class="grow"><input class="inp mono" value="D:\LLM Model" readonly></span></div>
+              <div class="f"><label>模型目录</label><span class="grow"><input class="inp mono" value="D:\LLM Model\llama.cpp\models" readonly></span></div>
+            </div>
+          </div>
+          <div class="sect">
+            <div class="sect-h">运行</div>
+            <div class="sect-b">
+              <div class="grid3">
+                <div class="f"><label>重启上限</label><span class="grow"><input class="inp mono" value="5" readonly></span></div>
+                <div class="f"><label>告警阈值</label><span class="grow"><input class="inp mono" value="90 %" readonly></span></div>
+                <div class="f"><label>随登录自启</label><button class="sw on" data-fn="随登录自启：应用随登录启动后，再按各用途的「随应用启动」策略拉起它们。" data-cond="恒可用"></button></div>
+              </div>
+            </div>
+          </div>
+          <div class="sect">
+            <div class="sect-h">数据</div>
+            <div class="sect-b">
+              <div class="f"><label>配置文件</label><span class="grow mono" style="font-size:11.5px;color:var(--color-ink-subtle)">%APPDATA%\服务中枢\services.json</span><button class="btn sm" data-toast="info|已复制路径" data-fn="复制路径（无副作用行为）。" data-cond="恒可用">复制</button></div>
+              <div class="f"><label>日志目录</label><span class="grow mono" style="font-size:11.5px;color:var(--color-ink-subtle)">8 个文件 · 共 4.6 MB（ov-server 3.36 MB 最大）</span><button class="btn sm" data-toast="info|已打开日志目录" data-fn="打开日志目录：把日志交给外部工具，或直接看全文。打开目录属无副作用行为。" data-cond="恒可用">打开</button></div>
+              <div class="f"><label>素材位置</label><span class="grow mono" style="font-size:11.5px;color:var(--color-ink-subtle)">D:\LLM Model\llama.cpp\models · 57.7 GB</span><button class="btn sm" data-toast="info|已打开素材目录" data-cond="恒可用" data-fn="打开素材目录（无副作用）。">打开</button></div>
+            </div>
+          </div>
+          <div class="sect">
+            <div class="sect-h">配置快照<span class="badge plain">改动前自动生成</span></div>
+            <div class="sect-b">
+              <div class="tl"><span class="t">09-23 07:21</span><span>应用外部变更前</span><span class="sp"></span><button class="btn sm" data-modal="m-danger" data-fn="回滚到该快照：会覆盖当前配置；回滚前会自动再存一份快照，所以这一步可逆。" data-cond="快照 ≥ 1">恢复</button></div>
+              <div class="tl"><span class="t">09-22 23:16</span><span>自动 · 保存前</span><span class="sp"></span><button class="btn sm" data-modal="m-danger" data-fn="回滚到该快照（回滚前自动再存一份）。" data-cond="快照 ≥ 1">恢复</button></div>
+              <div class="tl"><span class="t">09-22 23:10</span><span>自动 · 保存前</span><span class="sp"></span><button class="btn sm" data-modal="m-danger" data-fn="回滚到该快照（回滚前自动再存一份）。" data-cond="快照 ≥ 1">恢复</button></div>
+              <div class="tl"><span class="t">09-05 07:31</span><span>自动 · 保存前</span><span class="sp"></span><button class="btn sm" data-modal="m-danger" data-fn="回滚到该快照（回滚前自动再存一份）。" data-cond="快照 ≥ 1">恢复</button></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="scrim" id="scrim"></div>
+
+      <!-- ---------- D1 服务运行时抽屉 ---------- -->
+      <aside class="drawer" id="drawer" data-fn="D1 服务运行时抽屉：实例状态 + 生命周期动作 + 归因修正 + 日志尾部 + 运行记录。打开不离开当前页，所以「其它用途还可用吗」这个上下文不会丢。" data-cond="从成员行 / 卡内处置 / 清单行运行记录进入">
+        <div class="dr-h">
+          <span class="dot ok" id="drDot"></span>
+          <span style="font-weight:600" id="drName">intent</span>
+          <span class="badge info" id="drKind">模型服务</span>
+          <span class="sp"></span>
+          <button class="btn ghost sm" id="drX" data-fn="关闭抽屉，回到运行态。抽屉打开时不离开当前页。" data-cond="恒可用"><svg class="i sm"><use href="#i-x"/></svg></button>
+        </div>
+        <div class="dr-b" id="drBody"></div>
+        <div class="dr-f">
+          <button class="btn" data-toast="ok|已停止 · 端口与资源已释放" data-fn="停止：等待进程真正退出、端口真正释放后才算完成。若该成员被其它运行中的组共用，会先提示共用者。" data-cond="状态为运行中 / 就绪中">停止</button>
+          <button class="btn" data-toast="info|已重启 · 等待就绪" data-fn="重启：停止与启动在同一串行链内完成，不会出现「界面显示新参数、实际跑旧进程」。" data-cond="运行中 / 失败">重启</button>
+          <button class="btn danger" data-modal="m-danger" data-fn="强制停止：清理残留进程（可能已是孤儿进程）。危险动作，确认文案会说明后果。" data-cond="存在残留或启动中/重启中">强制停止</button>
+          <span class="sp"></span>
+          <button class="btn ghost sm" data-go="edit" data-fn="跳到服务编辑页的「定义」。编辑与观察分开：抽屉负责看当下，编辑页负责改定义。" data-cond="恒可用">编辑定义 →</button>
+        </div>
+      </aside>
+
+      <!-- ---------- M1 预检决策面 ---------- -->
+      <div class="ol" id="m-pre">
+        <div class="modal" data-fn="M1 预检决策面：只在四族条件「至少一族不通过」时出现。全过时它根本不出现——静默检查、直接启动，只在 Toast 说一句。预检不是收费站，而是只在过不去时出现的路障。展开顺序按「从最便宜可修到最贵可修」：依赖 → 环境 → 占用 → 资源。" data-cond="仅当至少一族不通过">
+          <div class="m-h"><svg class="i" style="color:var(--color-state-bad)"><use href="#i-alert"/></svg><span class="ttl">无法启动「聊天组」</span><span class="badge bad">需要先处理 2 项</span><span class="sp"></span><span class="badge plain">预检</span></div>
+          <div class="m-b">
+            <div class="fam"><div class="fam-h pass"><svg class="i sm" style="color:var(--color-state-ok)"><use href="#i-check"/></svg>① 依赖<span class="sp"></span><span class="badge ok">无问题</span></div></div>
+            <div class="fam"><div class="fam-h pass"><svg class="i sm" style="color:var(--color-state-ok)"><use href="#i-check"/></svg>② 环境<span class="sp"></span><span class="badge ok">无问题</span></div></div>
+            <div class="fam" id="fam-occ">
+              <div class="fam-h"><svg class="i sm" style="color:var(--color-state-warn)"><use href="#i-alert"/></svg>③ 占用<span class="sp"></span><span class="badge warn">冲突</span></div>
+              <div class="fam-b">
+                <div class="row"><span>「聊天组」标记为独占，而 <b>OpenViking 组</b> 正在运行（4/4 就绪）。预计释放 <b class="mono">8.1 GB</b> 显存。</span>
+                  <span class="acts"><button class="btn sm ghost" data-toast="info|已复制冲突详情" data-fn="复制冲突详情（无副作用）。" data-cond="恒可用">复制</button><button class="btn sm danger" data-act="release" data-fn="停掉占用方：按逆序停止 OpenViking 组并等待端口与资源真正释放，然后自动重新预检。这是「将停谁、能释放多少」两个数字的落地动作。" data-cond="占用方正在运行时" data-rel="fam-res">停掉它</button></span>
+                </div>
+                <div class="hint">顺序按「从最便宜可修到最贵可修」：依赖 → 环境 → 占用 → 资源。修完一项立即重新预检，不需要你自己记住还差什么。</div>
+              </div>
+            </div>
+            <div class="fam" id="fam-res">
+              <div class="fam-h"><svg class="i sm" style="color:var(--color-state-bad)"><use href="#i-alert"/></svg>④ 资源<span class="sp"></span><span class="badge bad">差 4.1 GB</span></div>
+              <div class="fam-b">
+                <div class="row"><span>需要 <b class="mono">18.7 GB</b> 显存（<span class="badge info">推算</span>：GGUF 16.69 GB + ctx 98304 的 KV 余量），当前余量 <b class="mono">14.6 GB</b>。</span>
+                  <span class="acts"><button class="btn sm" data-act="release" data-fn="释放：停占用者，给出可释放量。三条出口之一。" data-cond="有余量缺口">释放…</button><button class="btn sm" data-toast="info|已降需 · ctx 98304 → 32768，约省 12 GB" data-fn="降需：按建议值写回参数（ctx 98304 → 32768），约省 12 GB。它是「不改目标、只改需求」的出口。" data-cond="资源族不通过">降需…</button></span>
+                </div>
+                <div class="hint">三条出口：释放（停占用者，给出可释放量）／降需（改参数，给建议值）／换目标（换盘、换 runtime）。</div>
+              </div>
+            </div>
+          </div>
+          <div class="m-f">
+            <button class="btn" data-toast="info|已按降级启动 · 结果写入运行记录，用于修正下次预检" data-fn="强制启动（接受降级风险）：它不是反悔按钮，而是承认预检可能过于保守的出口。启动后的实际结果会写入运行记录，并用来修正该服务的需求估算——让预检一次比一次准。" data-cond="至少一族不通过">强制启动（接受降级风险）</button>
+            <span class="sp"></span>
+            <button class="btn ghost" data-close data-fn="取消：不改动任何东西。" data-cond="恒可用">取消</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---------- M2 危险确认 ---------- -->
+      <div class="ol" id="m-danger">
+        <div class="modal narrow" data-fn="M2 危险确认：五类动作各有专属文案——删除服务（停进程 + 从所有组摘掉 + 移除配置）、解散组（只解散，不删任何服务）、强制停止（可能留下孤儿进程）、回滚快照（会覆盖当前配置，回滚前自动再存一份）、退出（列出运行中的服务并让你决定停或留）。不允许共用一句「确定吗」。" data-cond="破坏性动作前">
+          <div class="m-h"><svg class="i" style="color:var(--color-state-bad)"><use href="#i-trash"/></svg><span class="ttl">删除服务「vlm」</span><span class="sp"></span><span class="badge bad">危险动作</span></div>
+          <div class="m-b">
+            <div style="font-size:12.5px;line-height:1.85;color:var(--color-ink-muted)">
+              将按顺序做三件事：<br>
+              ① 停止它的进程（当前<b>正在运行</b>，PID <span class="mono">23500</span>）并等待端口 <span class="mono">11435</span> 释放；<br>
+              ② 从 <b>OpenViking 组</b> 的成员里摘掉它（否则组里会留悬空成员，闭环 C7 的判据）；<br>
+              ③ 从配置中移除该服务。<br>
+              <span style="color:#e5b95c">模型文件不会被删除</span>（它在素材里，仍可被其它服务引用）。
+            </div>
+          </div>
+          <div class="m-f"><button class="btn danger" data-toast="ok|已删除 · vlm（进程已停、已从 OpenViking 组摘除）" data-close data-fn="确认删除服务：危险动作永远用文字按钮 + 危险色，不用实心大按钮，避免误点。" data-cond="恒可用">删除服务</button><span class="sp"></span><button class="btn ghost" data-close data-fn="取消，不改动任何东西。" data-cond="恒可用">取消</button></div>
+        </div>
+      </div>
+
+      <!-- ---------- M3 素材获取 ---------- -->
+      <div class="ol" id="m-asset">
+        <div class="modal asset" data-fn="M3 素材获取：按名称在镜像站搜索选型，或粘贴直链；可选填 SHA256 强制校验。下载不阻塞界面，进度可取消；哈希不符会删除损坏分片，大小不符则保留 .part 供续传。" data-cond="素材未就位或手动发起">
+          <div class="m-h"><svg class="i" style="color:var(--color-primary)"><use href="#i-down2"/></svg><span class="ttl">获取素材</span><span class="badge plain">模型文件</span></div>
+          <div class="m-b">
+            <div class="seg" style="align-self:flex-start"><button class="on">按名称搜索</button><button>直链下载</button></div>
+            <div class="f"><label>名称</label><span class="grow"><input class="inp" placeholder="例如 Qwen3-Reranker-0.6B"></span></div>
+            <div class="f"><label>SHA256</label><span class="grow"><input class="inp mono" placeholder="可选 · 64 位十六进制"></span></div>
+            <div style="box-shadow:0 0 0 1px var(--color-hairline);border-radius:var(--rounded-sm);background:var(--color-canvas);padding:9px">
+              <div style="display:flex;gap:8px;align-items:center;font-size:11.5px;color:var(--color-ink-subtle)"><span class="mono">Qwen3-Reranker-0.6B-Q4_K_M.gguf</span><span class="sp"></span><span class="mono">386 MB / 386 MB</span></div>
+              <div class="prog" style="margin-top:7px"><i style="width:100%"></i></div>
+            </div>
+            <div class="hint">长耗时动作的唯一出口必须显眼：进度可取消；取消后保留 .part，下次续传。</div>
+          </div>
+          <div class="m-f"><button class="btn" data-toast="bad|SHA256 不符 · 已删除损坏分片" data-fn="模拟哈希不符：校验失败会删除损坏分片并报错，可重试。失败 Toast 常驻到手动关闭。" data-cond="恒可用">模拟哈希不符</button><span class="sp"></span><button class="btn ghost" data-close data-fn="取消下载：保留 .part 供续传。" data-cond="恒可用">取消</button><button class="btn primary" data-toast="ok|已就位并校验通过" data-close data-fn="开始下载：完成后校验，通过才计为「已就位」。" data-cond="名称或直链至少填一项">开始下载</button></div>
+        </div>
+      </div>
+
+      <!-- ---------- M4 探测 ---------- -->
+      <div class="ol" id="m-detect">
+        <div class="modal mid" data-fn="M4 探测：新建服务的第一步。你给一个目录、一个文件或一段命令，系统先自己判断它是什么，再让你确认——而不是先让你从三个单选框里选。它省掉的是「我这份东西属于哪一类」这个判断成本。" data-cond="新建服务时">
+          <div class="m-h"><svg class="i" style="color:var(--color-primary)"><use href="#i-search"/></svg><span class="ttl">新建服务 · 第一步：它是什么</span></div>
+          <div class="m-b">
+            <div class="f"><label>位置</label><span class="grow"><input class="inp mono" value="E:\weknora" readonly></span></div>
+            <div style="box-shadow:0 0 0 1px #2a2d4d;background:var(--color-state-busy-bg);border-radius:var(--rounded-md);padding:10px;display:flex;flex-direction:column;gap:7px">
+              <div style="display:flex;align-items:center;gap:8px"><svg class="i sm" style="color:var(--color-primary)"><use href="#i-box"/></svg><b style="font-size:12.5px">判断为：docker 应用</b><span class="badge info">置信度高</span></div>
+              <div class="hint" style="color:#c3c8f0">依据：目录下有 <span class="mono">docker-compose.yml</span>、<span class="mono">docker-compose.override.yml</span>、<span class="mono">.env</span>。已推断：Compose 目录 <span class="mono">E:\weknora</span> · 端口 <span class="mono">18080</span>（来自 compose 的端口声明）· profile 未声明。</div>
+            </div>
+            <div class="f"><label>显示名称</label><span class="grow"><input class="inp" value="WeKnora 知识库"></span></div>
+            <div class="hint">探测结论必须抢眼——它省掉的是「我这份东西属于哪一类」这个判断成本。准备进度要就地，不要模态。</div>
+          </div>
+          <div class="m-f"><button class="btn primary" data-close data-go="edit" data-toast="info|已创建 · 请补齐必填项" data-fn="用这个形态继续：关闭探测、跳到服务编辑页，并按推断值预填可推断字段。这一个控件同时带三个行为（关闭 + 跳页 + 提示），必须全部生效。" data-cond="探测给出结论">用这个形态继续</button><button class="btn ghost" data-close data-fn="改成其它形态：手动选形态并填必填。这是探测给不出结论时的分支。" data-cond="恒可用">改成其它形态</button><span class="sp"></span><button class="btn ghost" data-close data-fn="取消：放弃纳管，不留任何东西。" data-cond="恒可用">取消</button></div>
+        </div>
+      </div>
+
+      <!-- ---------- M5 组编辑 ---------- -->
+      <div class="ol" id="m-group">
+        <div class="modal mid" data-fn="M5 组编辑：名称 / 成员多选 / 顺序 / 独占 / 随应用启动。顺序即启动与停止顺序——ov-server 必须先等 vlm、embedding、intent 就绪才连得上，所以这个顺序不是装饰，必须在界面上写明。" data-cond="新建或编辑预设组">
+          <div class="m-h"><svg class="i" style="color:var(--color-primary)"><use href="#i-layers"/></svg><span class="ttl">编辑预设组</span><span class="badge plain">OpenViking 组</span></div>
+          <div class="m-b">
+            <div class="f"><label>用途名</label><span class="grow"><input class="inp" value="OpenViking 组"></span></div>
+            <div class="hint">成员与顺序（按此顺序启动，逆序停止）</div>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <div class="ord"><span class="idx">1</span><span>vlm</span><span class="badge plain">模型服务 · 11435</span><span class="badge ok">已就绪</span><span class="acts"><button class="btn sm ghost" data-toast="info|已上移 vlm">↑</button><button class="btn sm ghost" data-toast="info|已下移 vlm">↓</button><button class="btn sm ghost" data-toast="ok|已移出成员 vlm"><svg class="i sm"><use href="#i-x"/></svg></button></span></div>
+              <div class="ord"><span class="idx">2</span><span>embedding</span><span class="badge plain">模型服务 · 11436</span><span class="badge ok">已就绪</span><span class="acts"><button class="btn sm ghost" data-toast="info|已上移 embedding">↑</button><button class="btn sm ghost" data-toast="info|已下移 embedding">↓</button><button class="btn sm ghost" data-toast="ok|已移出成员 embedding"><svg class="i sm"><use href="#i-x"/></svg></button></span></div>
+              <div class="ord"><span class="idx">3</span><span>intent</span><span class="badge plain">模型服务 · 11437</span><span class="badge ok">已就绪</span><span class="acts"><button class="btn sm ghost" data-toast="info|已上移 intent">↑</button><button class="btn sm ghost" data-toast="info|已下移 intent">↓</button><button class="btn sm ghost" data-toast="ok|已移出成员 intent"><svg class="i sm"><use href="#i-x"/></svg></button></span></div>
+              <div class="ord"><span class="idx">4</span><span>ov-server</span><span class="badge plain">源代码部署 · 1933</span><span class="badge warn">依赖 intent</span><span class="acts"><button class="btn sm ghost" data-toast="info|已上移 ov-server">↑</button><button class="btn sm ghost" data-toast="info|已下移 ov-server">↓</button><button class="btn sm ghost" data-toast="ok|已移出成员 ov-server"><svg class="i sm"><use href="#i-x"/></svg></button></span></div>
+            </div>
+            <button class="btn sm" style="align-self:flex-start" data-toast="info|从服务的「归属组」里加入本组">＋ 添加成员</button>
+            <div class="grid2" style="margin-top:2px">
+              <div class="f"><label>独占运行</label><button class="sw" data-fn="独占：启动时与其它独占组互斥，会先弹仲裁。" data-cond="恒可用"></button><span class="hint">启动时与其它独占组互斥</span></div>
+              <div class="f"><label>随应用启动</label><button class="sw" data-fn="随应用启动：按组内顺序逐个拉起并等就绪。" data-cond="恒可用"></button></div>
+            </div>
+          </div>
+          <div class="m-f"><button class="btn primary" data-toast="ok|已保存 · OpenViking 组" data-close data-fn="保存组定义：保存后组的表现必须与定义一致（闭环 C9）。若删掉的成员正在运行，会提示是否按新定义重启该组。" data-cond="至少一个成员且名称非空">保存</button><button class="btn danger" data-modal-close data-close data-toast="ok|已解散 · OpenViking 组（4 个服务都还在）" data-fn="解散该组：只解除组合，不删除任何服务。危险动作需确认，且文案与「删除服务」完全不同。" data-cond="该组已存在">解散该组</button><span class="sp"></span><button class="btn ghost" data-close data-fn="取消，不改动组定义。" data-cond="恒可用">取消</button></div>
+        </div>
+      </div>
+
+      <!-- ---------- NT 系统通知（被动行为的可见落点） ---------- -->
+      <div class="ol" id="m-notify">
+        <div class="modal narrow" data-fn="NT 系统通知：服务崩溃、重启达上限时弹出。它与卡上的异常态指向同一处（D1 抽屉），所以不重复表达细节，只给「去哪里修」。" data-cond="服务崩溃或重启达上限">
+          <div class="m-h"><svg class="i" style="color:var(--color-state-warn)"><use href="#i-bell"/></svg><span class="ttl">chat-27b 崩溃</span><span class="sp"></span><span class="badge warn">系统通知</span></div>
+          <div class="m-b">
+            <div class="kv">
+              <span class="k">服务</span><span class="v mono">chat-27b · 模型服务 · 8080</span>
+              <span class="k">重启</span><span class="v"><b class="mono">3 次 / 上限 5 次</b>——「快要放弃了」这件事必须可见</span>
+              <span class="k">退出码</span><span class="v mono">3</span>
+              <span class="k">时间</span><span class="v mono">17:04:32</span>
+            </div>
+            <div class="hint">处置层里会显示重启计数成「3 次 / 上限 5 次」；判据是重启计数停止增长。</div>
+          </div>
+          <div class="m-f"><button class="btn primary" data-drawer="chat-27b" data-close data-toast="info|已打开运行记录" data-fn="去处置：抽屉里给出归因、日志尾部、运行记录与修正动作。" data-cond="恒可用">去处置</button><span class="sp"></span><button class="btn danger" data-toast="ok|已禁用 chat-27b · 不再自动重启" data-close data-fn="禁用（阻止反复重启）：链路 8 的出口——重启计数停止增长，代价是它不会再自动起来。" data-cond="重启达上限">禁用（阻止反复重启）</button><button class="btn ghost" data-close data-fn="关闭通知，不改变状态。" data-cond="恒可用">关闭</button></div>
+        </div>
+      </div>
+
+      <!-- ---------- TR 托盘菜单（系统面在本页的可视化等价物） ---------- -->
+      <div class="ol" id="m-tray">
+        <div class="modal narrow" data-fn="TR 托盘菜单：打开主界面 / 快速启用某用途 / 退出。这条路线的价值就是「不打开主界面」——菜单要给足信息（哪个可用、哪个在跑）。" data-cond="右键托盘图标">
+          <div class="m-h"><svg class="i" style="color:var(--color-ink-subtle)"><use href="#i-tray"/></svg><span class="ttl">托盘菜单</span><span class="sp"></span><span class="badge plain">不打开主界面</span></div>
+          <div class="m-b">
+            <div class="gcard" style="margin:0">
+              <div class="gcard-b">
+                <button class="btn ghost" style="justify-content:flex-start;width:100%" data-toast="ok|已启用 OpenViking 组 · 4/4 可用" data-close data-fn="快速启用 OpenViking 组：走预检，四族全过则静默启动，只在 Toast 说一句。" data-cond="成员已启用且已准备">启用 OpenViking 组 <span class="sp"></span><span class="badge ok">4/4 可用</span></button>
+                <button class="btn ghost" style="justify-content:flex-start;width:100%" data-close data-modal="m-pre" data-fn="启用聊天组：本组标记独占且 OpenViking 组在运行，会先触发预检与仲裁，再决定是否切换。" data-cond="需先仲裁">启用聊天组 <span class="sp"></span><span class="badge warn">需先仲裁</span></button>
+                <button class="btn ghost" style="justify-content:flex-start;width:100%" data-toast="info|Rerank 已停止" data-close data-fn="快速停止单个用途。" data-cond="该用途在运行">停止 Rerank <span class="sp"></span><span class="badge plain">未运行</span></button>
+              </div>
+            </div>
+          </div>
+          <div class="m-f"><button class="btn primary" data-close data-toast="info|已打开主界面" data-fn="打开主界面：双击托盘唤起窗口，扫一眼，再关窗回托盘（关窗不退出，服务继续跑）。" data-cond="恒可用">打开主界面</button><span class="sp"></span><button class="btn ghost" data-close data-fn="收起菜单。" data-cond="恒可用">收起</button></div>
+        </div>
+      </div>
+
+      <div class="toasts" id="toasts"></div>
+    </div>
+    </div>
+  </div>
+
+  <!-- ==================== 标注层 ==================== -->
+  <aside class="annot" id="annot">
+    <div class="an-h"><span id="anName">控件说明</span><span class="sp"></span><span class="badge plain" id="anKind">悬停</span></div>
+    <div class="an-b" id="anBody">
+      <div class="help">
+        <b>这页是什么</b><br>
+        按 <span class="mono">ui-layout.md</span> 的三页结构 + 浮层设计做出的高精度预览，视觉语言落地自参照设计系统（<span class="mono">linear.app</span> 的令牌与规则，见文件头注释）。数据取自本机真实配置与实时状态。<br><br>
+        <b>怎么用</b><br>
+        · 顶部可切 <b>场景</b>（真实 / 排障 / 切换）、<b>视图</b>、<b>浮层</b>——所有面都能一键到达<br>
+        · 点卡片主按钮会走真实的<b>预检 → 仲裁 → 切换进度</b>流程<br>
+        · 打开「标注模式」后悬停控件，这里显示<b>功能 / 可用条件 / 关联控件</b><br>
+        · 关联控件会以强调色高亮；点击可固定说明，<kbd class="kbd">Esc</kbd> 取消
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script>
+/* ============================================================================
+   真实数据（逐字取自本机 services.json 与实时状态，未编造）
+   ============================================================================ */
+const GPU = { used:9623, total:24576 };                 /* nvidia-smi 实测（MiB） */
+const RAM = { used:19.2, total:63.8 };                  /* GB */
+const DISK = [
+  { letter:'D:', used:740, total:1024 },
+  { letter:'C:', used:531, total:931 },
+  { letter:'E:', used:406, total:500 },
+  { letter:'F:', used:293, total:500 }
+];
+const CPU = 'i5-12400F · 6 核 12 线程';
+
+/* 8 个服务。reranker 的模型路径在真实配置里含重复反斜杠（D:\\LLM Model\\...），
+   Windows 能解析，但属手改配置留下的痕迹——清单必须能暴露定义本身的问题。 */
+const SVC = {
+  'vlm':        { label:'VLM · Qwen2.5-VL-7B',             kind:'模型服务',   port:11435, alias:'qwen2.5-vl-7b',         vram:6448,  vramSrc:'推算', pid:23500, start:'06:54:02', model:'qwen2.5-vl-7b-instruct-Q4_K_M.gguf', running:true  },
+  'embedding':  { label:'Embedding · bge-m3',              kind:'模型服务',   port:11436, alias:'bge-m3',                 vram:678,   vramSrc:'推算', pid:8740,  start:'06:54:03', model:'bge-m3-Q8_0.gguf',                    running:true  },
+  'intent':     { label:'Intent · ov_intent_analysis_sft', kind:'模型服务',   port:11437, alias:'ov_intent_analysis_sft', vram:867,   vramSrc:'推算', pid:21736, start:'06:54:04', model:'ov_intent_analysis_sft-Q8_0.gguf',    running:true  },
+  'ov-server':  { label:'OpenViking 服务',                 kind:'源代码部署', port:1933,  alias:'',                       vram:320,   vramSrc:'估算', pid:7852,  start:'06:54:06', model:'',                                    running:true  },
+  'chat-27b':   { label:'Chat · Qwen3.8-27B',              kind:'模型服务',   port:8080,  alias:'qwen3.8-27b',            vram:19144, vramSrc:'推算', pid:null,  start:null,       model:'Qwen3.8-27B-UD-Q4_K_XL.gguf',          running:false },
+  'reranker':   { label:'Rerank · Qwen3-Reranker-0.6B',    kind:'模型服务',   port:11438, alias:'qwen3-reranker-0.6b',    vram:423,   vramSrc:'推算', pid:null,  start:null,       model:'Qwen3-Reranker-0.6B-Q4_K_M.gguf',      running:false, dirtyPath:true },
+  'weknora':    { label:'WeKnora 知识库',                  kind:'docker 应用',port:18080, alias:'',                       vram:null,  vramSrc:'—',    pid:null,  start:null,       model:'',                                    running:false },
+  'laya':       { label:'Laya · System 1 决策',            kind:'源代码部署', port:11439, alias:'laya',                   vram:null,  vramSrc:'声明', pid:null,  start:null,       model:'',                                    running:false }
+};
+const RECENT = {
+  'vlm':'成功 · 今天 06:54', 'embedding':'成功 · 今天 06:54', 'intent':'成功 · 今天 06:54', 'ov-server':'成功 · 今天 06:54',
+  'chat-27b':'成功 · 9 月 6 日', 'reranker':'成功 · 9 月 27 日', 'weknora':'成功 · 9 月 17 日', 'laya':'成功 · 9 月 27 日'
+};
+const GROUPOF = { 'vlm':'OpenViking 组', 'embedding':'OpenViking 组', 'intent':'OpenViking 组', 'ov-server':'OpenViking 组', 'chat-27b':'聊天组' };
+
+/* 9 个 GGUF · 共 57.7 GB。[名称, 类型, 大小, 校验, 被引用者, 引用数] */
+const ASSETS = [
+  ['Qwen3.8-27B-UD-Q4_K_XL.gguf','模型文件','16.69 GB','已校验','chat-27b',1],
+  ['qwen2.5-vl-7b-instruct-Q4_K_M.gguf','模型文件','4.36 GB','已校验','vlm',1],
+  ['mmproj-f16.gguf','模型文件','1.26 GB','已校验','vlm',1],
+  ['ov_intent_analysis_sft-Q8_0.gguf','模型文件','0.76 GB','已校验','intent',1],
+  ['bge-m3-Q8_0.gguf','模型文件','0.59 GB','已校验','embedding',1],
+  ['Qwen3-Reranker-0.6B-Q4_K_M.gguf','模型文件','0.37 GB','已校验','reranker',1],
+  ['SenseNova-U1.5-8B-MoT-Preview-Q8.gguf','模型文件','18.58 GB','未校验','—',0],
+  ['qwen2.5-vl-7b-instruct-f16.gguf','模型文件','14.19 GB','未校验','—',0],
+  ['mmproj-F16.gguf','模型文件','0.86 GB','未校验','—',0,'与 mmproj-f16 仅大小写不同 = 重复素材']
+];
+/* 日志真实行（intent）。开头形如 17.27.560.754 I slot get_availabl: */
+const LOG_INTENT = `17.27.560.754 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 744473368
+17.27.610.775 I slot launch_slot_: id  0 | task 327 | processing task, is_child = 0
+17.28.430.785 I slot print_timing: id  0 | task 327 | prompt eval time =     341.22 ms /  2521 tokens (    0.14 ms per token,  7388.15 tokens per second)
+17.28.430.792 I slot print_timing: id  0 | task 327 |        eval time =     478.75 ms /   147 tokens (    3.28 ms per token,   304.96 tokens per second)
+17.28.430.793 I slot print_timing: id  0 | task 327 |       total time =     819.97 ms /  2668 tokens
+17.28.430.794 I slot print_timing: id  0 | task 327 |    graphs reused =        454
+17.28.431.107 I slot      release: id  0 | task 327 | stop processing: n_tokens = 2667, truncated = 0`;
+const LOG_OV = `    INFO     Processing request of type           server.py:733
+                           ListToolsRequest
+    INFO     Terminating session: None   streamable_http.py:788
+2026-09-29 07:06:29,558 - openviking.retrieve.context_assembler.expansion - WARNING - [request_id=93b23e89] Query expansion skipped: no candidate chunks
+2026-09-29 07:11:33,409 - openviking.retrieve.context_assembler.expansion - WARNING - [request_id=73738fe0] Query expansion skipped: no candidate chunks`;
+const LOG_OV_FAIL = `17:04:02 [startup] OpenViking 服务启动，配置 D:\\deepseek\\ov-data\\ov.conf
+17:04:02 [deps] 检查依赖端点：vlm 11435 ✓ · embedding 11436 ✓ · intent 11437 …
+17:04:32 [deps] ERROR connect timeout: intent endpoint not ready (30s)
+17:04:32 [startup] 退出码 3 —— 服务未进入就绪态`;
+/* 日志体积（MB，实测）：ov-server 最大 */
+const LOGSIZE = { 'ov-server':3.36, 'reranker':0.48, 'intent':0.35, 'vlm':0.27, 'embedding':0.08, 'laya':0.03, 'chat-27b':0.01, 'weknora':0.01 };
+
+let SCENARIO = 'real';
+const $  = (s,r)=>(r||document).querySelector(s);
+const $$ = (s,r)=>Array.prototype.slice.call((r||document).querySelectorAll(s));
+const mb = v => v>=1024 ? (v/1024).toFixed(1)+' GB' : v+' MB';
+const esc = s => String(s).replace(/</g,'&lt;');
+
+/* ============================================================================
+   用途卡数据：真实 / 排障（合成） / 切换（合成）
+   ============================================================================ */
+function cards(sc){
+  const ok = { 'vlm':'ok','embedding':'ok','intent':'ok','ov-server':'ok' };
+  const ov = sc==='trouble'
+    ? { state:'部分可用 3/4', dot:'warn', bar:'warn',
+        err:'ov-server 未就绪：等待 intent 就绪超时（30s）',
+        members:{ 'vlm':'ok','embedding':'ok','intent':'ok','ov-server':'bad' } }
+    : sc==='switch'
+      ? { state:'停止中 2/4', dot:'busy', bar:'busy',
+          members:{ 'vlm':'busy','embedding':'busy','intent':'stop','ov-server':'stop' },
+          prog:'切换事务进行中：已停 ov-server、intent，正在停 vlm、embedding 并等待显存释放 8.1 GB' }
+      : { state:'可用 4/4', dot:'ok', bar:'ok', members:ok };
+  const chat = sc==='switch'
+    ? { state:'切换中', dot:'busy', bar:'busy', excl:true,
+        prog:'停止 OpenViking 组 → 等待显存释放 8.1 GB → 启动 chat-27b → 等待就绪 0/1' }
+    : { state:'未运行', dot:'idle', bar:'idle', excl: sc!=='real' };
+  const out = [];
+  out.push({ id:'ov', name:'OpenViking 组', sub:'vlm · embedding · intent · ov-server',
+    note:'4 个成员，顺序即启动序：先 vlm/embedding/intent，等就绪后再起 ov-server（它要连这三个后端）', auto:false });
+  Object.assign(out[0], ov);
+  out.push({ id:'chat', name:'聊天组', sub:'chat-27b · 8080 · 需 18.7 GB 显存',
+    note:'独占组：启动时若 OpenViking 组在运行，会先弹仲裁——列出将停止的组与预计释放的资源', auto:false });
+  Object.assign(out[1], chat);
+  out.push({ id:'rr', name:'Rerank · Qwen3-Reranker-0.6B', sub:'reranker · 11438 · 单成员', state:'未运行', dot:'idle', bar:'idle', auto:false });
+  out.push({ id:'wk', name:'WeKnora 知识库', sub:'weknora · docker 应用 · 18080 · 单成员', state:'未运行', dot:'idle', bar:'idle', auto:false });
+  out.push({ id:'ly', name:'Laya · System 1 决策', sub:'laya · 11439 · 单成员', state:'未运行', dot:'idle', bar:'idle', auto:false });
+  return out;
+}
+
+/* ============================================================================
+   P1 渲染：用途卡 + 资源面
+   ============================================================================ */
+function renderCards(){
+  const wrap = $('#cards'); wrap.innerHTML='';
+  cards(SCENARIO).forEach(function(c){
+    const el = document.createElement('div');
+    el.className='card'; el.id='card-'+c.id;
+    let errBlock='';
+    if(c.err){
+      errBlock = '<div class="card-err"><svg class="i sm"><use href="#i-alert"/></svg><span>'+c.err+'</span>'
+        + '<button class="btn sm danger" data-drawer="ov-server" data-fn="进入处置：抽屉里给出归因（哪一族条件 + 哪个阶段）、日志尾部、运行记录，以及按归因给出的具体修正动作。排障时不跳页，避免丢掉「其它用途还可用吗」这个上下文。" data-cond="存在异常时" data-rel="drBody">处置</button></div>';
+    }
+    let progBlock='';
+    if(c.prog){
+      progBlock = '<div class="card-prog"><svg class="i sm"><use href="#i-restart"/></svg><span>'+c.prog+'</span>'
+        + '<button class="btn sm danger" data-toast="info|已中止并回滚 · OpenViking 组已恢复" data-fn="中止并回滚：切换是一个事务——中途失败会把让位的旧档恢复，而不是停在「两头落空」。中止同样走回滚。" data-cond="处于停止/启动阶段">中止并回滚</button></div>';
+    }
+    let members='';
+    if(c.members){
+      members = '<div class="exp on" id="exp-'+c.id+'">' + Object.keys(c.members).map(function(id){
+        const st = c.members[id], s = SVC[id];
+        const dotCls = st==='ok'?'ok':st==='bad'?'bad':st==='busy'?'busy':'idle';
+        const badge = st==='ok'   ? '<span class="badge ok">运行中</span><span class="badge ok">已就绪</span>'
+                    : st==='bad'  ? '<span class="badge bad">失败</span><span class="badge bad">就绪超时</span>'
+                    : st==='busy' ? '<span class="badge info">停止中</span>'
+                    : st==='stop' ? '<span class="badge plain">已停止</span>'
+                                  : '<span class="badge plain">未运行</span>';
+        const acts = (st==='ok'||st==='busy')
+          ? '<button class="btn sm" data-toast="ok|已停止 · '+id+'（端口与资源已释放）" data-fn="停止该服务：等进程真正退出、端口真正释放后才算完成。" data-cond="运行中">停止</button>'
+            + '<button class="btn sm" data-toast="info|已重启 · '+id+'" data-fn="重启：停止与启动在同一串行链内完成。" data-cond="运行中 / 失败">重启</button>'
+          : '<button class="btn sm" data-toast="ok|已启动 · '+id+'" data-fn="启动该服务：先走四族预检；未准备时此按钮先变成「准备」。" data-cond="已准备">启动</button>';
+        return '<div class="mrow"><span class="dot '+dotCls+'"></span><span class="nm">'+id+'</span>'
+          + '<span class="port">'+s.port+'</span>'+badge
+          + '<span class="badge plain">'+(st==='ok'? mb(s.vram)+' '+s.vramSrc : '—')+'</span>'
+          + '<span class="acts">'+acts
+          + '<button class="btn sm" data-drawer="'+id+'" data-fn="打开服务抽屉：实例状态、生命周期动作、日志尾部、运行记录。" data-cond="恒可用" data-rel="drBody">详情</button>'
+          + '</span></div>';
+      }).join('') + '</div>';
+    }
+    const excl = c.excl
+      ? '<span class="badge info" data-fn="独占标记：启动本组时若其它独占组在运行，先弹仲裁——列出将停止的组与预计释放的资源。注意：真实配置里 exclusivePresets 是空数组，此标记属演示注入。" data-cond="仅当该组被标记为独占" data-rel="card-chat"><svg class="i sm" style="width:10px;height:10px"><use href="#i-lock"/></svg>独占</span>'
+      : '';
+    let mainBtn;
+    if(c.state==='切换中'){
+      mainBtn = '<button class="btn danger sm" data-toast="info|已中止并回滚">中止</button>';
+    } else if(c.state==='未运行'){
+      mainBtn = '<button class="btn primary sm" data-act="'+(c.id==='chat'?'enable-chat':'enable')+'" data-fn="启用本组：先走预检（依赖→环境→占用→资源）。四族全过则静默启动，只在 Toast 说一句；不通过才展开决策面。'+(c.id==='chat'?'本组标记独占且 OpenViking 组在运行，因此会给出仲裁提示。':'')+'" data-cond="至少一个成员已启用且已准备" data-rel="fam-res,m-pre">启用</button>';
+    } else {
+      mainBtn = '<button class="btn sm" data-toast="ok|已停用 · '+c.name+'" data-fn="停用：逆序停止全部成员。若成员被其它运行中的组共用，会先提示共用者。" data-cond="可用 / 部分可用">停用</button>';
+    }
+    const stateBadge = c.dot==='ok'?'ok':c.dot==='warn'?'warn':c.dot==='busy'?'info':'plain';
+    el.innerHTML =
+      '<div class="card-top">'
+      + '<div class="card-bar '+c.bar+'"></div>'
+      + '<div class="card-main">'
+      +   '<div class="card-line1">'
+      +     '<span class="dot '+c.dot+'"></span>'
+      +     '<span class="card-name" data-fn="用途卡：一张卡 = 一个用途（一个预设组）。卡上只放决策所需的东西——可用性、成员就绪进度、异常原因；不堆字段。单成员用途就是单成员卡，所以运行态不需要第二套模型。" data-cond="恒显示">'+c.name+'</span>'
+      +     '<span class="badge '+stateBadge+'" data-fn="可用性徽标：由成员的 n/m 与失败数推导。部分可用必须可见——否则你只看到「没起来」，却不知道已有三件在跑、占着资源。" data-cond="恒显示"'+(c.members?' data-rel="exp-'+c.id+'"':'')+'>'+c.state+'</span>'
+      +     excl
+      +   '</div>'
+      +   '<div class="card-meta"><span>'+c.sub+'</span></div>'
+      + '</div>'
+      + '<div class="card-act">'
+      +   '<button class="sw '+(c.auto?'on':'')+'" data-toast="ok|已更新随应用启动" data-fn="随应用启动：应用启动时自动按组内顺序拉起本组，并逐个等就绪。它属于策略，不属于每次操作。" data-cond="组成员 ≥ 1"></button>'
+      +   mainBtn
+      +   '<button class="btn sm ghost" data-toast="info|菜单：重启整组 / 编辑组 / 解散组" data-fn="溢出菜单：重启整组 / 编辑组 / 解散组（解散只解除组合，不删除任何服务）。" data-cond="编辑与解散恒可用，重启整组需已运行">⋯</button>'
+      + '</div></div>'
+      + errBlock + progBlock + members
+      + (c.note ? '<div class="note">'+c.note+'</div>' : '');
+    wrap.appendChild(el);
+  });
+}
+
+function renderRes(){
+  const managed = ['vlm','embedding','intent','ov-server'];
+  const ovSum = managed.reduce(function(a,id){ return a + SVC[id].vram; },0);       /* 8313 MB */
+  const other = GPU.used - ovSum;                                                   /* 1310 MB */
+  const free  = GPU.total - GPU.used;                                               /* 14953 MiB */
+  const chatNeed = SVC['chat-27b'].vram;                                            /* 19144 MB = 18.7 GB */
+  const gap = chatNeed - free;                                                      /* 4191 MiB = 4.1 GB */
+  const pct = Math.round(GPU.used/GPU.total*100);
+  $('#col-res').innerHTML =
+    '<div class="res-h">资源</div>'
+    + '<div class="res-b">'
+    +   '<div class="metric" data-used="显存已用 9623 MiB（9.6 GB）/ 24576 MiB（24 GB）· 告警阈值 90%" data-fn="显存：本机唯一那份 24 GB，是「切换用途」这个动作的约束条件。它常驻但低调，接近阈值才醒目——它是预检的可视化，不是监控仪表盘。" data-cond="常驻；无 NVIDIA 驱动时显示「显存数据不可用」">'
+    +     '<div class="metric-top"><span>显存</span><b>'+(GPU.used/1024).toFixed(1)+' / '+(GPU.total/1024).toFixed(0)+' GB</b></div>'
+    +     '<div class="bar"><i class="'+(pct>=90?'bad':pct>=70?'warn':'')+'" style="width:'+pct+'%"></i></div>'
+    +     '<div class="hint">RTX 3090 · 实测已用 '+GPU.used+' MiB（9.6 GB）· 占 '+pct+'% · 告警阈值 90%</div>'
+    +   '</div>'
+    +   '<div class="metric"><div class="metric-top"><span>内存</span><b>'+RAM.used+' / '+RAM.total+' GB</b></div><div class="bar"><i style="width:'+Math.round(RAM.used/RAM.total*100)+'%"></i></div></div>'
+    +   DISK.map(function(d){
+          return '<div class="metric"><div class="metric-top"><span>磁盘 '+d.letter+'</span><b>'+d.used+' / '+d.total+' GB</b></div><div class="bar"><i style="width:'+Math.round(d.used/d.total*100)+'%"></i></div></div>';
+        }).join('')
+    +   '<div class="hint">CPU '+CPU+'（模型服务各占 6 线程）</div>'
+    + '</div>'
+    + '<div class="res-h">按当前余量</div>'
+    + '<div class="res-b">'
+    +   '<div class="canlist" data-fn="可启动清单：把「余量数字」翻译成「你现在可以做什么」。这是资源面最有用的输出——它回答的是决策问题，不是监控问题。" data-cond="有可用余量时">'
+    +     '<div>可启动：<b>Rerank · WeKnora · Laya</b></div>'
+    +     '<div class="no">需先释放：<b>聊天组</b>（需 '+(chatNeed/1024).toFixed(1)+' GB，余量 '+(free/1024).toFixed(1)+' GB，差 '+(gap/1024).toFixed(1)+' GB）</div>'
+    +     '<div style="color:var(--color-ink-tertiary)">停掉 OpenViking 组可释放约 <b>'+(ovSum/1024).toFixed(1)+' GB</b>，够启动聊天组</div>'
+    +   '</div>'
+    + '</div>'
+    + '<div class="res-h">占用者</div>'
+    + '<div class="res-b">'
+    +   managed.map(function(id){
+          return '<div class="occ" data-fn="占用者按占用排序，并标注来源可信度：推算（模型服务可由 GGUF + 参数算出）／估算／实测。三者混用同一视觉，比不做预检更危险。" data-cond="有服务运行时">'
+            + '<span class="n">'+id+'</span><span class="v">'+mb(SVC[id].vram)+'</span>'
+            + '<span class="badge '+(SVC[id].vramSrc==='推算'?'info':'warn')+'">'+SVC[id].vramSrc+'</span>'
+            + '<button class="btn sm" data-toast="ok|已停止 · '+id+'">停</button></div>';
+        }).join('')
+    +   '<div class="occ"><span class="n">其它进程</span><span class="v">'+mb(other)+'</span><span class="badge ok">实测</span><span style="width:26px"></span></div>'
+    +   '<div class="hint">账目对得上：6448 + 678 + 867 + 320 = 8313 MB（OpenViking 组）+ '+other+' MB（其它进程）= '+GPU.used+' MiB。</div>'
+    + '</div>';
+}
+
+/* ============================================================================
+   P2 渲染：服务清单 / 预设组 / 素材
+   ============================================================================ */
+function renderSvcRows(){
+  $('#svcRows').innerHTML = Object.keys(SVC).map(function(id){
+    const s = SVC[id], g = GROUPOF[id];
+    const dirty = s.dirtyPath
+      ? ' <span class="dot warn" style="display:inline-block;vertical-align:middle" data-fn="真实数据里这条服务的模型路径含重复反斜杠（D:\\\\LLM Model\\\\…）。Windows 能解析，但属于手改配置留下的痕迹。它出现在这里，是为了说明「清单要能暴露定义本身的问题」——而不是只在启动失败时才告诉你。" data-cond="该服务定义存在可疑处"></span>'
+      : '';
+    const prepared = (id==='laya') ? '<span class="badge warn">未准备</span>' : '<span class="badge ok">已准备</span>';
+    return '<tr>'
+      + '<td class="nm">'+id+dirty+'</td>'
+      + '<td><span class="badge plain">'+s.kind+'</span></td>'
+      + '<td><span class="mono">'+s.port+'</span>'+(s.alias?' · <span class="mono" style="font-size:11px;color:var(--color-ink-tertiary)">'+s.alias+'</span>':'')+'</td>'
+      + '<td>'+(g?'<span class="badge plain">'+g+'</span>':'<span class="badge plain" style="opacity:.7">未分组</span>')+'</td>'
+      + '<td><span class="badge ok">已启用</span> '+prepared+' <span class="badge '+(s.running?'ok':'plain')+'">'+(s.running?'运行中':'未运行')+'</span></td>'
+      + '<td style="color:var(--color-ink-subtle);font-size:11.5px">'+RECENT[id]+'</td>'
+      + '<td><button class="btn sm ghost" data-drawer="'+id+'" data-toast="info|已打开运行记录 · '+id+'" data-fn="行尾 ⋯：编辑 / 复制 / 删除 / 准备 / 试运行 / 运行记录 / 打开所在目录 / 导出 / 加入组。行内不放启用与自启开关——它们有副作用，放在服务编辑页更安全，也让清单保持「定义视角」。" data-cond="恒可用" data-rel="drBody">⋯</button></td>'
+      + '</tr>';
+  }).join('');
+}
+
+function renderGrpList(){
+  const g1 = ['vlm','embedding','intent','ov-server'];
+  const g2 = ['chat-27b'];
+  const single = ['reranker','weknora','laya'];
+  function box(name, ids, excl){
+    return '<div class="gcard" data-fn="预设组卡片：组 = 一个用途的实现。成员顺序就是启动与停止顺序，所以这里必须显式排序，而不是只列成员。" data-cond="恒显示">'
+      + '<div class="gcard-h"><svg class="i sm" style="color:var(--color-primary)"><use href="#i-layers"/></svg>'
+      + '<span class="nm">'+name+'</span><span class="badge plain">'+ids.length+' 个成员</span>'
+      + (excl?'<span class="badge info">独占</span>':'<span class="badge plain">可并行</span>')
+      + '<span class="sp"></span>'
+      + '<button class="sw '+(name==='OpenViking 组'?'':'on')+'" data-toast="ok|已更新随应用启动" data-fn="随应用启动：按组内顺序逐个拉起并等就绪。" data-cond="组成员 ≥ 1"></button>'
+      + '<button class="btn sm" data-modal="m-group" data-fn="编辑组：改用途名、增删成员、调整顺序、标记独占。" data-cond="恒可用">编辑</button>'
+      + '</div><div class="gcard-b">'
+      + ids.map(function(id,i){
+          return '<div class="ord"><span class="idx">'+(i+1)+'</span><span>'+id+'</span>'
+            + '<span class="badge plain" style="font-family:var(--font-text)">'+SVC[id].kind+' · '+SVC[id].port+'</span>'
+            + '<span class="sp"></span>'
+            + '<span class="badge plain" style="font-family:var(--font-text)">'+(SVC[id].vram? mb(SVC[id].vram)+' '+SVC[id].vramSrc : '—')+'</span></div>';
+        }).join('')
+      + '</div></div>';
+  }
+  $('#grpList').innerHTML = box('OpenViking 组', g1, false) + box('聊天组', g2, false)
+    + '<div class="gcard"><div class="gcard-h"><svg class="i sm" style="color:var(--color-ink-tertiary)"><use href="#i-box"/></svg>'
+    + '<span class="nm">未分组服务</span><span class="badge plain">'+single.length+' 个</span><span class="sp"></span>'
+    + '<span class="hint">不属于任何组的服务在运行态自动成为单成员用途，不需要为它们单独建组</span></div>'
+    + '<div class="gcard-b">' + single.map(function(id){
+        return '<div class="ord"><span class="idx">—</span><span>'+id+'</span>'
+          + '<span class="badge plain" style="font-family:var(--font-text)">'+SVC[id].kind+' · '+SVC[id].port+'</span>'
+          + '<span class="sp"></span><span class="badge plain" style="font-family:var(--font-text)">'+(SVC[id].vram? mb(SVC[id].vram) : '—')+'</span></div>';
+      }).join('') + '</div></div>';
+}
+
+function renderAssets(){
+  $('#assetRows').innerHTML = ASSETS.map(function(a){
+    const n=a[0], t=a[1], sz=a[2], ck=a[3], ref=a[4], cnt=a[5], dup=a[6];
+    return '<tr>'
+      + '<td><span class="path">'+n+'</span>'+(dup?' <span class="badge warn" data-fn="重复素材：'+dup+'。删除前必须检查引用计数（闭环 C14 的判据是引用计数为 0）。" data-cond="存在同名不同大小写的素材">重复</span>':'')+'</td>'
+      + '<td><span class="badge plain">'+t+'</span></td>'
+      + '<td class="mono" style="font-size:11.5px">'+sz+'</td>'
+      + '<td>'+(ck==='已校验'?'<span class="badge ok">已校验</span>':'<span class="badge warn">未校验</span>')+'</td>'
+      + '<td>'+(cnt?'<span class="badge plain">'+ref+'</span>':'<span class="badge warn">未被引用</span>')+'</td>'
+      + '<td>'+(cnt
+          ? '<button class="btn sm" data-toast="info|'+n+' 被 '+ref+' 引用">查看引用</button>'
+          : '<button class="btn sm" data-toast="ok|已加入模型列表，可一键体验">纳入</button>')
+      + '</td></tr>';
+  }).join('');
+}
+
+/* ============================================================================
+   D1 抽屉
+   ============================================================================ */
+function openDrawer(id){
+  const s = SVC[id] || SVC.intent;
+  const fault = SCENARIO==='trouble' && id==='ov-server';
+  const running = !!s.pid && !fault;
+  $('#drDot').className = 'dot ' + (fault?'bad':running?'ok':'idle');
+  $('#drName').textContent = id;
+  $('#drKind').textContent = s.kind;
+  const log = id==='intent' ? LOG_INTENT
+            : id==='ov-server' ? (fault? LOG_OV_FAIL : LOG_OV)
+            : (id==='chat-27b' && SCENARIO!=='real') ? LOG_OV_FAIL : LOG_INTENT;
+  const size = (LOGSIZE[id]!==undefined? LOGSIZE[id] : 0.01).toFixed(2)+' MB';
+  $('#drBody').innerHTML =
+    '<div class="sect">'
+    + '<div class="sect-h">状态<span class="badge '+(fault?'bad':running?'ok':'plain')+'">'+(fault?'失败 · 就绪超时':running?'运行中 · 已就绪':'未运行')+'</span><span class="badge plain">'+s.kind+'</span></div>'
+    + '<div class="sect-b"><div class="kv">'
+    +   '<span class="k">端口</span><span class="v">'+s.port+(s.alias?' · alias '+s.alias:'')+'</span>'
+    +   '<span class="k">PID</span><span class="v">'+(fault?'（已退出，退出码 3）': s.pid? s.pid+' · 启动于 '+s.start : '—')+'</span>'
+    +   '<span class="k">显存</span><span class="v">'+(s.vram? mb(s.vram)+' · '+s.vramSrc : '—')+'</span>'
+    +   (s.model?'<span class="k">模型</span><span class="v">'+s.model+'</span>':'')
+    +   '<span class="k">日志</span><span class="v">%APPDATA%\\服务中枢\\logs\\'+id+'.log</span>'
+    + '</div></div></div>'
+    + (fault
+      ? '<div class="sect" style="box-shadow:0 0 0 1px #43222a">'
+        + '<div class="sect-h" style="color:#ff8b8e">归因<span class="badge bad">依赖 · 就绪超时</span></div>'
+        + '<div class="sect-b"><div class="hint" style="color:#ffb4ae">族 = <b>依赖</b>（intent 未就绪）；阶段 = <b>就绪超时</b>（等待 30s）。「起不来」与「起来了但不可用」的修法完全不同——所以归因要分两个维度，而不是只给一句「启动失败」。</div>'
+        + '<div style="display:flex;gap:6px"><button class="btn sm" data-toast="info|已复制错误">复制错误</button><button class="btn sm ghost" data-toast="info|已打开日志目录">打开目录</button></div>'
+        + '</div></div>'
+      : '')
+    + '<div class="sect">'
+    + '<div class="sect-h">日志尾部<span class="badge plain">'+size+' · 5 MB 轮转</span><span class="sp"></span>'
+    +   '<button class="btn sm ghost" data-toast="info|已打开日志目录">打开目录</button>'
+    +   '<button class="btn sm ghost" data-toast="ok|日志已清空">清空</button></div>'
+    + '<div class="sect-b"><div class="log">'+esc(log)+'</div></div></div>'
+    + '<div class="sect">'
+    + '<div class="sect-h">运行记录<span class="badge plain">Run + Event · 保留最近 20 条</span></div>'
+    + '<div class="sect-b">'
+    + (fault
+      ? '<div class="tl"><span class="t">17:04:32</span><span class="dot bad"></span><span>就绪超时 · 退出码 3</span></div>'
+        + '<div class="tl"><span class="t">17:04:02</span><span class="dot busy"></span><span>启动 · 等待依赖 intent</span></div>'
+        + '<div class="tl"><span class="t">09-27 14:34</span><span class="dot ok"></span><span>成功运行 5h12m · 峰值内存 486 MB <span class="badge warn">实测</span></span></div>'
+        + '<div class="hint">重启计数：3 次 / 上限 5 次——「快要放弃了」这件事必须可见（链路 8）。</div>'
+      : '<div class="tl"><span class="t">'+(s.start||'—')+'</span><span class="dot ok"></span><span>就绪 · 耗时 1.8s · 峰值 '+(s.vram? mb(s.vram):'—')+'</span></div>'
+        + '<div class="tl"><span class="t">06:54:04</span><span class="dot busy"></span><span>启动 · 由 OpenViking 组按序拉起</span></div>'
+        + '<div class="tl"><span class="t">09-27 14:34</span><span class="dot ok"></span><span>成功运行 5h12m · 被手动停止</span></div>')
+    + '</div></div>'
+    + (fault
+      ? '<div class="sect"><div class="sect-h">修正<span class="badge plain">按归因给出 · 1–3 个</span></div>'
+        + '<div class="sect-b" style="flex-direction:row;flex-wrap:wrap;gap:6px">'
+        + '<button class="btn primary sm" data-toast="ok|已按序启动 intent，正在重试 ov-server">先启动依赖</button>'
+        + '<button class="btn sm" data-toast="info|已延长等待至 120s">延长等待</button>'
+        + '<button class="btn sm" data-go="edit" data-toast="info|已跳到编辑页">编辑服务</button>'
+        + '<button class="btn sm" data-toast="info|已重试">重试</button>'
+        + '<button class="btn sm" data-go="config" data-toast="info|已跳到配置页">去准备</button>'
+        + '<button class="btn danger sm" data-toast="ok|已强制停止并清理残留">强制停止</button>'
+        + '</div></div>'
+      : '');
+  $('#drawer').classList.add('on');
+  $('#scrim').classList.add('on');
+}
+function closeDrawer(){
+  $('#drawer').classList.remove('on');
+  if(!$$('.ol.on').length) $('#scrim').classList.remove('on');
+}
+
+/* ============================================================================
+   模态 / Toast / 视图 / 场景
+   ============================================================================ */
+function openModal(id){
+  $$('.ol').forEach(function(m){ m.classList.remove('on'); });   /* 同屏只允许一个模态 */
+  $('#scrim').classList.add('on');
+  $('#'+id).classList.add('on');
+}
+function closeModals(){
+  $$('.ol').forEach(function(m){ m.classList.remove('on'); });
+  if(!$('#drawer').classList.contains('on')) $('#scrim').classList.remove('on');
+}
+/* Toast 上限 4 条；失败 Toast 常驻到手动关闭（ui-layout.md T1） */
+function toast(kind, text){
+  const box = $('#toasts');
+  const el = document.createElement('div');
+  el.className = 'toast ' + (kind||'ok');
+  const ic = kind==='bad' ? 'i-alert' : kind==='info' ? 'i-alert' : 'i-check';
+  const c  = kind==='bad' ? 'var(--color-state-bad)' : kind==='info' ? 'var(--color-state-busy)' : 'var(--color-state-ok)';
+  el.innerHTML = '<svg class="i sm" style="color:'+c+'"><use href="#'+ic+'"/></svg><span>'+esc(text)+'</span>'
+    + (kind==='bad' ? '<button class="x" data-x title="关闭">✕</button>' : '');
+  box.appendChild(el);
+  while(box.children.length > 4) box.firstElementChild.remove();
+  if(kind!=='bad') setTimeout(function(){ el.remove(); }, 4000);
+}
+function go(view){
+  $$('.view').forEach(function(v){ v.classList.toggle('on', v.id==='v-'+view); });
+  $('#navBack').style.display = view==='run' ? 'none' : 'inline-flex';
+  $$('[data-go]').forEach(function(b){
+    if(b.classList.contains('tb')) b.classList.toggle('on', b.getAttribute('data-go')===view);
+  });
+}
+function setScenario(sc){
+  SCENARIO = sc;
+  $$('[data-sc]').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-sc')===sc); });
+  $('#resAlert').classList.remove('on');
+  $('#notice').classList.toggle('on', sc==='real' && $('#notice').getAttribute('data-force')==='1');
+  renderCards(); renderRes();
+  if(sc==='trouble') toast('info','演示场景（合成）：ov-server 就绪超时（依赖 intent）');
+  if(sc==='switch')  toast('info','演示场景（合成）：聊天组切换中（事务进行）');
+}
+
+/* ============================================================================
+   行为绑定：一律事件委托 —— 一个控件可同时带多个 data-* 行为，逐个执行
+   ============================================================================ */
+document.addEventListener('click', function(e){
+  const xBtn = e.target.closest('.toast .x');
+  if(xBtn){ xBtn.closest('.toast').remove(); return; }
+
+  const nav = e.target.closest('[data-jump-to]');
+  if(nav){
+    const sec = document.getElementById(nav.getAttribute('data-jump-to'));
+    if(sec) sec.scrollIntoView({block:'start'});
+    $$('.nav-i').forEach(function(n){ n.classList.toggle('on', n===nav); });
+    return;
+  }
+
+  const t = e.target.closest('[data-go],[data-modal],[data-modal-close],[data-close],[data-toast],[data-drawer],[data-act],[data-tab],[data-sc],[data-notice],[data-tray],[data-spec],[data-ignore],.sw');
+  if(!t) return;
+
+  /* 标注模式下点击 = 固定说明，不触发真实行为 */
+  if(document.body.classList.contains('spec') && t.hasAttribute('data-fn')) return;
+
+  if(t.hasAttribute('data-ignore')){
+    $('#notice').classList.remove('on');
+    toast('info','已忽略本次提示 · 下次变更仍会提示');
+    return;
+  }
+  if(t.hasAttribute('data-notice')){
+    $('#notice').setAttribute('data-force','1'); $('#notice').classList.add('on');
+    toast('info','已模拟：外部修改了 services.json（reranker 端口 11438 → 11441）');
+    return;
+  }
+  if(t.hasAttribute('data-tray')){ openModal('m-tray'); return; }
+
+  /* data-act="release"（停掉占用方）由本处理器负责，还要切场景 */
+  if(t.getAttribute('data-act')==='release'){
+    closeModals(); setScenario('switch');
+    toast('ok','已停 OpenViking 组 · 释放 8.1 GB · 开始启动聊天组');
+    return;
+  }
+  if(t.getAttribute('data-act')==='enable-chat'){ openModal('m-pre'); return; }
+  if(t.getAttribute('data-act')){ toast('ok','已启用 · 按序拉起并等待就绪'); return; }
+
+  /* 多行为逐个执行：顺序即下面的书写顺序 */
+  if(t.hasAttribute('data-sc'))     setScenario(t.getAttribute('data-sc'));
+  if(t.hasAttribute('data-tab'))    switchTab(t);
+  if(t.hasAttribute('data-go'))     go(t.getAttribute('data-go'));
+  if(t.hasAttribute('data-modal'))  openModal(t.getAttribute('data-modal'));
+  if(t.hasAttribute('data-drawer')) openDrawer(t.getAttribute('data-drawer'));
+  if(t.classList.contains('sw'))    t.classList.toggle('on');
+  if(t.hasAttribute('data-toast')){
+    const kv = t.getAttribute('data-toast').split('|');
+    toast(kv[0], kv[1]);
+  }
+  if(t.hasAttribute('data-close') || t.hasAttribute('data-modal-close')) closeModals();
+});
+
+function switchTab(t){
+  const k = t.getAttribute('data-tab');
+  $$('.cfg-tab').forEach(function(x){ x.classList.toggle('on', x===t); });
+  $('#tab-svc').style.display   = k==='svc'   ? 'flex' : 'none';
+  $('#tab-grp').style.display   = k==='grp'   ? 'flex' : 'none';
+  $('#tab-asset').style.display = k==='asset' ? 'flex' : 'none';
+}
+
+document.addEventListener('click', function(e){
+  if(e.target.closest('#drX')) closeDrawer();
+  if(e.target.closest('#scrim')){ closeModals(); closeDrawer(); }
+});
+
+/* ============================================================================
+   标注层（事件委托 + 运行时解析 data-rel）
+   ============================================================================ */
+let pinned = null;
+function find(id){
+  return document.getElementById(id)
+      || document.querySelector('[data-id="'+id+'"]')
+      || document.querySelector('[data-target="'+id+'"]');
+}
+function specTarget(e){
+  const el = e.target.closest('[data-fn]');
+  if(!el) return null;
+  if(/^(INPUT|SELECT|OPTION)$/.test(el.tagName)) return null;
+  return el;
+}
+document.addEventListener('mouseover', function(e){
+  const el = specTarget(e);
+  if(!el || pinned) return;
+  if(e.relatedTarget && el.contains(e.relatedTarget)) return;
+  showSpec(el);
+});
+document.addEventListener('mouseout', function(e){
+  const el = specTarget(e);
+  if(!el || pinned) return;
+  if(e.relatedTarget && el.contains(e.relatedTarget)) return;
+  resetSpec();
+});
+document.addEventListener('focusin', function(e){
+  const el = specTarget(e);
+  if(el && !pinned) showSpec(el);
+});
+document.addEventListener('focusout', function(e){
+  const el = specTarget(e);
+  /* 没有复位时，焦点离开后面板会留着上一个控件的说明，读起来像当前控件的属性 */
+  if(el && !pinned) resetSpec();
+});
+document.addEventListener('click', function(e){
+  if(!document.body.classList.contains('spec')) return;
+  const el = specTarget(e);
+  if(!el) return;
+  e.preventDefault(); e.stopPropagation();
+  if(pinned===el){ el.classList.remove('pin'); pinned=null; resetSpec(); return; }
+  if(pinned) pinned.classList.remove('pin');
+  pinned = el; el.classList.add('pin'); showSpec(el);
+}, true);
+
+function labelOf(el, max){
+  const s = (el.getAttribute('data-name') || el.textContent || '').trim().replace(/\s+/g,' ');
+  return s.slice(0, max||16) || '控件';
+}
+function showSpec(el){
+  const rel = (el.getAttribute('data-rel')||'').split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+  $$('[data-fn]').forEach(function(x){ x.classList.remove('rel'); });
+  rel.forEach(function(id){ const t=find(id); if(t) t.classList.add('rel'); });
+  $('#anName').textContent = labelOf(el);
+  $('#anKind').textContent = el.tagName==='BUTTON' ? (el.classList.contains('sw')?'开关':'按钮')
+                            : el.tagName==='INPUT'||el.tagName==='SELECT' ? '输入' : '区域';
+  let h = '<div><div class="an-k">功能</div><div class="an-v">'+esc(el.getAttribute('data-fn')||'—')+'</div></div>';
+  h += '<div><div class="an-k">可用条件</div><div class="an-v dim">'+esc(el.getAttribute('data-cond')||'未声明')+'</div></div>';
+  if(rel.length){
+    h += '<div><div class="an-k">关联控件（已高亮）</div><div class="an-rel">';
+    rel.forEach(function(id){
+      const t = find(id);
+      if(t) h += '<button class="jump" data-jump="'+id+'">'+esc(labelOf(t,24))+'</button>';
+    });
+    h += '</div></div>';
+  } else {
+    h += '<div><div class="an-k">关联控件</div><div class="an-v dim">无</div></div>';
+  }
+  $('#anBody').innerHTML = h;
+}
+function resetSpec(){
+  $$('[data-fn]').forEach(function(x){ x.classList.remove('rel'); });
+  $('#anName').textContent = '控件说明';
+  $('#anKind').textContent = '悬停';
+  $('#anBody').innerHTML = '<div class="help">打开「标注模式」后悬停控件，这里显示 <b>功能 / 可用条件 / 关联控件</b>。点击可固定说明，<kbd class="kbd">Esc</kbd> 取消。</div>';
+}
+/* 关联跳转：点面板里的关联控件按钮 → 把它滚进视野并高亮 */
+document.addEventListener('click', function(e){
+  const j = e.target.closest('.jump');
+  if(!j) return;
+  const t = find(j.getAttribute('data-jump'));
+  if(t){ t.scrollIntoView({block:'center'}); t.classList.add('pin'); setTimeout(function(){ if(t!==pinned) t.classList.remove('pin'); }, 1200); }
+});
+document.addEventListener('keydown', function(e){
+  if(e.key!=='Escape') return;
+  if(pinned){ pinned.classList.remove('pin'); pinned=null; resetSpec(); return; }
+  if($$('.ol.on').length){ closeModals(); return; }
+  if($('#drawer').classList.contains('on')){ closeDrawer(); return; }
+  if(document.body.classList.contains('spec')) toggleSpec(false);
+});
+function toggleSpec(force){
+  const on = (force===undefined) ? !document.body.classList.contains('spec') : force;
+  document.body.classList.toggle('spec', on);
+  const b = $('[data-spec]');
+  b.classList.toggle('on', on);
+  b.textContent = on ? '退出标注' : '标注模式';
+  if(!on){ if(pinned){ pinned.classList.remove('pin'); pinned=null; } resetSpec(); }
+}
+
+/* ============================================================================
+   启动
+   ============================================================================ */
+renderCards(); renderRes(); renderSvcRows(); renderGrpList(); renderAssets();
+$('#btnSpec') && 0;
+</script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>服务中枢 · 四版设计对照查看器</title>
+<title>服务中枢 · 设计对照查看器</title>
 <style>
   :root{
     --bg:#0b0d10; --bar:#14171c; --panel:#191d23; --line:#2a313a; --line2:#3b444f;
@@ -13,51 +13,69 @@
   html,body{height:100%}
   body{background:var(--bg);color:var(--text);font:13px/1.45 "Segoe UI","Microsoft YaHei",system-ui,sans-serif;display:flex;flex-direction:column}
 
-  header{flex:none;background:var(--bar);border-bottom:1px solid var(--line);padding:9px 14px;display:flex;flex-wrap:wrap;gap:9px;align-items:center}
+  header{flex:none;background:var(--bar);border-bottom:1px solid var(--line);padding:8px 12px;display:flex;flex-direction:column;gap:7px}
+  .row1{display:flex;flex-wrap:wrap;gap:9px;align-items:center}
   .title{font-size:13.5px;font-weight:600;margin-right:4px}
-  .tabs{display:flex;gap:3px;background:#101317;border:1px solid var(--line);border-radius:6px;padding:3px}
-  .tab{border:0;background:transparent;color:var(--dim);font:inherit;font-size:12px;padding:5px 12px;border-radius:4px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:7px}
+  .spacer{flex:1}
+  .btn{border:1px solid var(--line2);background:#191d23;color:var(--text);font:inherit;font-size:12px;padding:4px 10px;border-radius:4px;cursor:pointer;white-space:nowrap}
+  .btn:hover{border-color:var(--accent)}
+  .btn.on{border-color:var(--accent);color:var(--accent)}
+  a.btn{text-decoration:none;display:inline-block}
+
+  .tabrow{display:flex;flex-wrap:wrap;gap:3px;align-items:center}
+  .glbl{font-size:10.5px;color:var(--dim2);letter-spacing:.06em;padding:0 6px 0 2px;white-space:nowrap}
+  .tab{border:1px solid transparent;background:transparent;color:var(--dim);font:inherit;font-size:12px;
+       padding:4px 10px;border-radius:4px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px}
   .tab:hover{background:#1c2128;color:var(--text)}
   .tab.on{background:var(--accent);color:#04121f;font-weight:600}
   .sw{width:11px;height:11px;border-radius:3px;border:1px solid rgba(255,255,255,.25);flex:none}
-  .spacer{flex:1}
-  .btn{border:1px solid var(--line2);background:#191d23;color:var(--text);font:inherit;font-size:12px;padding:5px 11px;border-radius:4px;cursor:pointer}
-  .btn:hover{border-color:var(--accent)}
-  .btn.on{border-color:var(--accent);color:var(--accent)}
+  .sep{width:1px;height:16px;background:var(--line2);margin:0 4px}
   .meta{font-size:11.5px;color:var(--dim2);width:100%}
   .meta b{color:var(--dim);font-weight:600}
 
   main{flex:1;min-height:0;position:relative;overflow:hidden}
-  .pane{display:none;position:absolute;inset:0;overflow:auto;padding:14px}
+  .pane{display:none;position:absolute;inset:0;overflow:auto;padding:12px}
   .pane.on{display:block}
   .frame-wrap{transform-origin:top left}
   iframe{width:1520px;height:1010px;border:1px solid var(--line2);border-radius:8px;background:#000;display:block}
 
-  .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-content:start}
+  .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-content:start}
+  .grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
   figure{background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden;display:flex;flex-direction:column}
   figure img{width:100%;display:block;background:#000}
-  figcaption{padding:8px 11px;display:flex;align-items:baseline;gap:9px;border-top:1px solid var(--line)}
+  figcaption{padding:7px 10px;display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--line)}
   figcaption b{font-size:12.5px}
-  figcaption span{font-size:11.5px;color:var(--dim2)}
-  .hint{padding:11px 14px;font-size:12px;color:var(--dim2);border-top:1px solid var(--line);flex:none;background:var(--bar)}
+  figcaption span{font-size:11.5px;color:var(--dim2);line-height:1.45}
+  .hint{padding:8px 12px;font-size:12px;color:var(--dim2);border-top:1px solid var(--line);flex:none;background:var(--bar)}
   kbd{font-family:"Cascadia Mono",Consolas,monospace;font-size:11px;border:1px solid var(--line2);border-bottom-width:2px;border-radius:3px;padding:0 5px;color:var(--text)}
 </style>
 </head>
 <body>
 <header>
-  <span class="title">服务中枢 · 四版设计对照</span>
-  <div class="tabs" id="tabs">
-    <button class="tab on" data-i="0"><i class="sw" style="background:#0d0f12"></i>现任（石墨 + 电光蓝）</button>
-    <button class="tab" data-i="1"><i class="sw" style="background:#f4f1ec"></i>V1 · design-taste-frontend</button>
+  <div class="row1">
+    <span class="title">服务中枢 · 设计对照</span>
+    <span class="spacer"></span>
+    <button class="btn" id="fit">适宽</button>
+    <button class="btn on" id="real">1 : 1</button>
+    <a class="btn" id="open" href="ui-preview.html" target="_blank">在新窗口打开</a>
+  </div>
+  <div class="tabrow" id="tabs">
+    <span class="glbl">技能驱动</span>
+    <button class="tab on" data-i="0"><i class="sw" style="background:#0d0f12"></i>现任</button>
+    <button class="tab" data-i="1"><i class="sw" style="background:#f4f1ec"></i>V1 · design-taste</button>
     <button class="tab" data-i="2"><i class="sw" style="background:#e1eaec"></i>V2 · hallmark</button>
     <button class="tab" data-i="3"><i class="sw" style="background:#f6f7f6"></i>V3 · impeccable（已精修）</button>
-    <button class="tab" data-i="4"><i class="sw" style="background:#8892a0"></i>并排快照</button>
-    <button class="tab" data-i="5"><i class="sw" style="background:linear-gradient(90deg,#d5d7d2 50%,#171a1b 50%)"></i>V3 精修前后</button>
+    <span class="sep"></span>
+    <span class="glbl">设计库驱动</span>
+    <button class="tab" data-i="4"><i class="sw" style="background:#010102"></i>L1 · Linear</button>
+    <button class="tab" data-i="5"><i class="sw" style="background:#ffffff"></i>L2 · Carbon</button>
+    <button class="tab" data-i="6"><i class="sw" style="background:#faff69"></i>L3 · ClickHouse</button>
+    <span class="sep"></span>
+    <span class="glbl">快照</span>
+    <button class="tab" data-i="7">四版并排</button>
+    <button class="tab" data-i="8">V3 精修前后</button>
+    <button class="tab" data-i="9">设计库三版并排</button>
   </div>
-  <span class="spacer"></span>
-  <button class="btn" id="fit">适宽</button>
-  <button class="btn on" id="real">1 : 1</button>
-  <a class="btn" id="open" href="ui-preview.html" target="_blank" style="text-decoration:none">在新窗口打开</a>
   <div class="meta" id="meta"></div>
 </header>
 
@@ -66,36 +84,63 @@
   <div class="pane" data-pane="1"><div class="frame-wrap"><iframe data-src="ui-v1-taste.html" title="V1"></iframe></div></div>
   <div class="pane" data-pane="2"><div class="frame-wrap"><iframe data-src="ui-v2-hallmark.html" title="V2"></iframe></div></div>
   <div class="pane" data-pane="3"><div class="frame-wrap"><iframe data-src="ui-v3-impeccable.html" title="V3"></iframe></div></div>
-  <div class="pane" data-pane="4">
+  <div class="pane" data-pane="4"><div class="frame-wrap"><iframe data-src="ui-l1-linear.html" title="L1"></iframe></div></div>
+  <div class="pane" data-pane="5"><div class="frame-wrap"><iframe data-src="ui-l2-carbon.html" title="L2"></iframe></div></div>
+  <div class="pane" data-pane="6"><div class="frame-wrap"><iframe data-src="ui-l3-clickhouse.html" title="L3"></iframe></div></div>
+
+  <div class="pane" data-pane="7">
     <div class="grid">
       <figure><img src="shots/0-current.png" alt="现任" loading="lazy"><figcaption><b>现任</b><span>石墨底 + 电光蓝 · 圆角卡片 · 画窗口外框</span></figcaption></figure>
       <figure><img src="shots/1-taste.png" alt="V1" loading="lazy"><figcaption><b>V1 · design-taste-frontend</b><span>暖石纸面 + 赭褐 · 单一 2px 圆角 · 零投影</span></figcaption></figure>
       <figure><img src="shots/2-hallmark.png" alt="V2" loading="lazy"><figcaption><b>V2 · hallmark</b><span>瓷白 + 墨青 · 全 OKLCH 令牌 · 不画窗口外框</span></figcaption></figure>
-      <figure><img src="shots/3-impeccable.png" alt="V3" loading="lazy"><figcaption><b>V3 · impeccable（已精修）</b><span>近白台面 + 松绿 · 圆角体系 7/10/16 · 柔和投影 · 深色画布</span></figcaption></figure>
+      <figure><img src="shots/3-impeccable.png" alt="V3" loading="lazy"><figcaption><b>V3 · impeccable（已精修）</b><span>近白台面 + 松绿 · 圆角体系 · 柔和投影 · 深色画布</span></figcaption></figure>
     </div>
   </div>
-  <div class="pane" data-pane="5">
+
+  <div class="pane" data-pane="8">
     <div class="grid">
-      <figure><img src="shots/3-impeccable-before.png" alt="精修前" loading="lazy"><figcaption><b>改之前</b><span>搪瓷灰 #d5d7d2 台面 · 页面底色 #a9ada8（灰桌面放灰窗口）· 全表零圆角 · 刻蚀双线 · 10px 起小字</span></figcaption></figure>
-      <figure><img src="shots/3-impeccable.png" alt="精修后" loading="lazy"><figcaption><b>改之后</b><span>近白 #f6f7f6 台面 · 深色画布 #171a1b · 圆角 7/10/16 · 柔和投影 · 基准 13px · 滚动条与焦点环主题化</span></figcaption></figure>
+      <figure><img src="shots/3-impeccable-before.png" alt="精修前" loading="lazy"><figcaption><b>改之前</b><span>搪瓷灰 #d5d7d2 台面 · 页面底色 #a9ada8 · 全表零圆角 · 刻蚀双线 · 10px 起小字</span></figcaption></figure>
+      <figure><img src="shots/3-impeccable.png" alt="精修后" loading="lazy"><figcaption><b>改之后</b><span>近白 #f6f7f6 台面 · 深色画布 #171a1b · 圆角 7/10/16 · 柔和投影 · 基准 13px</span></figcaption></figure>
+    </div>
+  </div>
+
+  <div class="pane" data-pane="9">
+    <div class="grid three">
+      <figure><img src="shots/4-l1-linear.png" alt="L1" loading="lazy"><figcaption><b>L1 · Linear</b><span>canvas #010102 · 薰衣草蓝只用在 CTA 与焦点环 · 表面阶梯 + 发丝线，不用投影</span></figcaption></figure>
+      <figure><img src="shots/5-l2-carbon.png" alt="L2" loading="lazy"><figcaption><b>L2 · Carbon</b><span>白底 · 唯一蓝 #0f62fe · 全 0px 直角 · weight 300 展示字 · 无投影</span></figcaption></figure>
+      <figure><img src="shots/6-l3-clickhouse.png" alt="L3" loading="lazy"><figcaption><b>L3 · ClickHouse</b><span>#0a0a0a 底 · 电黄 #faff69 同时承担 CTA 与统计读数 · 无投影</span></figcaption></figure>
     </div>
   </div>
 </main>
 
 <div class="hint">
-  <kbd>1</kbd>–<kbd>6</kbd> 切换 · <kbd>←</kbd><kbd>→</kbd> 前后一版 · <kbd>0</kbd> 切适宽 / 1:1 ·
-  五份文件都在本目录，全部单文件离线，双击也能直接看。并排快照是静态 PNG（由无头 Chrome 渲染）。
+  <kbd>1</kbd>–<kbd>9</kbd> 切换 · <kbd>←</kbd><kbd>→</kbd> 前后一版 · <kbd>0</kbd> 切适宽 / 1:1 ·
+  L1/L2/L3 的视觉语言分别取自 <span style="font-family:Consolas,monospace">design-md-library</span> 的 linear.app / ibm / clickhouse 三份 DESIGN.md。
 </div>
 
 <script>
 (function(){
   var DATA = [
-    { file:'ui-preview.html',      name:'现任（石墨 + 电光蓝）',  note:'1120×780 窗口外框 · 圆角卡片 · 投影 6 处 · 16 进制令牌' },
-    { file:'ui-v1-taste.html',     name:'V1 · design-taste-frontend', note:'暖石纸面 + 赭褐 · 圆角只有 0/1/2px · 零 box-shadow · 密度 9 · 88 个标注控件' },
-    { file:'ui-v2-hallmark.html',  name:'V2 · hallmark',          note:'瓷白纸 + 墨青 · 全部 OKLCH 命名令牌 · 不画假窗口外框（hallmark gate 47）· Cambria 正体显示字' },
-    { file:'ui-v3-impeccable.html',name:'V3 · impeccable（已精修）', note:'近白台面 + 松绿 · 圆角体系 7/10/16 · 柔和投影 · 深色画布 · 量程账本签名件保留' },
-    { file:null,                   name:'并排快照',                note:'四版首屏静态 PNG 对照（1520×1010，无头 Chrome 渲染）' },
-    { file:null,                   name:'V3 精修前后',             note:'同一版的两次外观：灰桌面+灰面板+零圆角 → 深色画布+近白台面+圆角体系+柔和投影' }
+    { file:'ui-preview.html',      name:'现任',
+      note:'石墨底 #0d0f12 + 电光蓝 #4c9aff · 圆角 3–9px 混用 · 画 1120×780 窗口外框' },
+    { file:'ui-v1-taste.html',     name:'V1 · design-taste-frontend',
+      note:'暖石纸面 #f4f1ec + 赭褐 #9c4a24 · 圆角仅 0/1/2px · 零投影 · 密度 9' },
+    { file:'ui-v2-hallmark.html',  name:'V2 · hallmark',
+      note:'瓷白 + 墨青 · 全 OKLCH 命名令牌 · 不画假窗口外框 · Cambria 正体显示字' },
+    { file:'ui-v3-impeccable.html',name:'V3 · impeccable（已精修）',
+      note:'近白台面 + 松绿 · 圆角体系 7/10/16 · 柔和投影 · 深色画布' },
+    { file:'ui-l1-linear.html',    name:'L1 · Linear 设计语言',
+      note:'canvas #010102 · surface 阶梯 + 发丝线 · 薰衣草蓝 #5e6ad2 只给 CTA/焦点环 · 抵制投影' },
+    { file:'ui-l2-carbon.html',    name:'L2 · Carbon 设计语言',
+      note:'白底 + 唯一蓝 #0f62fe · 全 0px 直角 · weight 300 展示字 · 0.16px 字距 · 无投影' },
+    { file:'ui-l3-clickhouse.html',name:'L3 · ClickHouse 设计语言',
+      note:'#0a0a0a 底 + 电黄 #faff69 · 黄色同时承担 CTA 与统计读数 · 无投影 · 8px 控件圆角' },
+    { file:null,                   name:'四版并排快照',
+      note:'技能驱动四版首屏对照（1520×1010）' },
+    { file:null,                   name:'V3 精修前后',
+      note:'同一版两次外观：灰桌面+灰面板+零圆角 → 深色画布+近白台面+圆角体系' },
+    { file:null,                   name:'设计库三版并排快照',
+      note:'Linear / Carbon / ClickHouse 三份设计语言落地后的首屏对照' }
   ];
   var tabs = [].slice.call(document.querySelectorAll('.tab'));
   var panes = [].slice.call(document.querySelectorAll('.pane'));
@@ -103,15 +148,14 @@
   var open = document.getElementById('open'), meta = document.getElementById('meta');
   var current = 0, fitMode = false;
 
-  /* iframe 只在首次显示时赋 src：五份文件都不小，避免一次性全部加载 */
   function ensure(pane){
     var f = pane.querySelector('iframe');
     if (f && !f.getAttribute('src')) f.setAttribute('src', f.dataset.src);
   }
   function applyScale(){
     [].slice.call(document.querySelectorAll('.frame-wrap')).forEach(function(w){
-      if (!fitMode){ w.style.transform = 'none'; return; }
-      var avail = w.parentElement.clientWidth - 28;
+      if (!fitMode){ w.style.transform='none'; w.style.height=''; return; }
+      var avail = w.parentElement.clientWidth - 24;
       var s = Math.min(1, avail / 1520);
       w.style.transform = 'scale(' + s + ')';
       w.style.height = (1010 * s) + 'px';
@@ -119,24 +163,24 @@
   }
   function show(i){
     current = i;
-    tabs.forEach(function(t,k){ t.classList.toggle('on', k === i); });
-    panes.forEach(function(p,k){ p.classList.toggle('on', k === i); });
+    tabs.forEach(function(t,k){ t.classList.toggle('on', k===i); });
+    panes.forEach(function(p,k){ p.classList.toggle('on', k===i); });
     ensure(panes[i]);
     var d = DATA[i];
     meta.innerHTML = '<b>' + d.name + '</b> — ' + d.note;
-    if (d.file){ open.style.display = ''; open.setAttribute('href', d.file); }
-    else { open.style.display = 'none'; }
+    if (d.file){ open.style.display=''; open.setAttribute('href', d.file); }
+    else { open.style.display='none'; }
     applyScale();
   }
   tabs.forEach(function(t){ t.addEventListener('click', function(){ show(+t.dataset.i); }); });
-  fit.addEventListener('click', function(){ fitMode = true; fit.classList.add('on'); real.classList.remove('on'); applyScale(); });
-  real.addEventListener('click', function(){ fitMode = false; real.classList.add('on'); fit.classList.remove('on'); applyScale(); });
+  fit.addEventListener('click', function(){ fitMode=true; fit.classList.add('on'); real.classList.remove('on'); applyScale(); });
+  real.addEventListener('click', function(){ fitMode=false; real.classList.add('on'); fit.classList.remove('on'); applyScale(); });
   window.addEventListener('resize', applyScale);
   document.addEventListener('keydown', function(e){
-    if (e.key >= '1' && e.key <= '6'){ show(+e.key - 1); return; }
+    if (e.key >= '1' && e.key <= '9'){ show(+e.key - 1); return; }
     if (e.key === 'ArrowRight'){ show((current + 1) % DATA.length); return; }
     if (e.key === 'ArrowLeft'){ show((current + DATA.length - 1) % DATA.length); return; }
-    if (e.key === '0'){ fitMode = !fitMode; fit.classList.toggle('on', fitMode); real.classList.toggle('on', !fitMode); applyScale(); }
+    if (e.key === '0'){ fitMode=!fitMode; fit.classList.toggle('on',fitMode); real.classList.toggle('on',!fitMode); applyScale(); }
   });
   show(0);
 })();
