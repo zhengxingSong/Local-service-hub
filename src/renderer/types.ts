@@ -67,8 +67,26 @@ export interface SnapshotInfo {
   reason: string;
 }
 
-/** 运行记录：一次「启动 → 结束」 */
-export interface RunRecord {
+/** 探测结果：给一个目录，判断它是什么形态（依据可核对） */
+export interface ProbeResult {
+  path: string;
+  kind: 'llama' | 'command' | 'compose' | 'unknown' | 'missing';
+  evidence: string[];
+  suggestion: {
+    label?: string;
+    model?: string;
+    mmproj?: string;
+    command?: string;
+    cwd?: string;
+    composeDir?: string;
+    composeFile?: string;
+    composeProfiles?: string[];
+    port?: number;
+  };
+  candidates: { label: string; value: string }[];
+}
+
+/** 运行记录：一次「启动 → 结束」 */export interface RunRecord {
   id: string;
   serviceId: string;
   label: string;

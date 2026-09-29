@@ -134,6 +134,19 @@
             ]);
           },
           clearRuns: function () { return Promise.resolve(0); },
+          pickDirectory: function () { return Promise.resolve('E:\\weknora'); },
+          inspectPath: function (p) {
+            return Promise.resolve({
+              path: p, kind: 'compose',
+              evidence: [
+                '目录里有 docker-compose.yml。',
+                '从 docker-compose.yml 里读到主机端口 18080（粗略解析，请核对）。',
+                '读到 profiles：neo4j。'
+              ],
+              suggestion: { label: 'weknora', composeDir: p, composeFile: 'docker-compose.yml', composeProfiles: ['neo4j'], port: 18080 },
+              candidates: []
+            });
+          },
           downloadModel: function () { return Promise.resolve({ ok: true, path: 'x.gguf', sha256Verified: true }); },
           cancelDownload: function () { return Promise.resolve(true); },
           openLogDir: function () { return Promise.resolve(true); },
@@ -385,7 +398,7 @@
                             (c2.match(/会把它从这[^、]*、?[^、]*/) || [''])[0]);
                           var cancel2 = byText('取消');
                           if (cancel2) cancel2.click();
-                          finish();
+                          phase8();
                         }, 300);
                       }, 400);
                     }, 400);
@@ -393,6 +406,41 @@
                 }, 300);
               }, 300);
             }, 300);
+          }, 300);
+        }
+
+        /* 阶段八：探测（新增服务 → 选目录 → 判断形态 → 用这个形态继续 → 预填） */
+        function phase8() {
+          var newBtn = byText('新增服务');
+          if (!newBtn) { out.push('MISS | 找不到「新增服务」'); finish(); return; }
+          newBtn.click();
+          setTimeout(function () {
+            mark('探测·新增服务先探测', !!q('.probe') && txt('.probe').indexOf('这个目录是什么') >= 0);
+            var browse = qa('.probe-pick button').filter(function (b) { return /浏览/.test(b.textContent); })[0];
+            if (!browse) { out.push('MISS | 探测面没有「浏览」按钮'); finish(); return; }
+            browse.click();
+            setTimeout(function () {
+              mark('探测·选目录后自动判断形态', txt('.probe').indexOf('docker 应用') >= 0);
+              mark('探测·摆出可核对的依据', qa('.probe-ev-line').length >= 2, qa('.probe-ev-line').length + ' 条依据');
+              mark('探测·建议值标明来源', /建议端口 18080/.test(txt('.probe')) && /profiles neo4j/.test(txt('.probe')));
+              mark('探测·目录路径回填', qa('.probe-pick input').length > 0 && qa('.probe-pick input')[0].value.indexOf('weknora') >= 0,
+                qa('.probe-pick input')[0].value);
+              mark('Carbon·探测面 0px 圆角', qa('.probe-ev, .probe-note').every(function (e) {
+                return getComputedStyle(e).borderTopLeftRadius === '0px';
+              }));
+              var use = byText('用这个形态继续');
+              if (!use) { out.push('MISS | 探测面没有「用这个形态继续」'); finish(); return; }
+              use.click();
+              setTimeout(function () {
+                mark('探测·继续后进入服务编辑', qa('.sec').length === 6, qa('.sec').length + ' 段');
+                var vals = qa('#sec-start input').map(function (e) { return e.value; });
+                mark('探测·把预填值带进表单', vals.some(function (v) { return v.indexOf('weknora') >= 0; }), vals.slice(0, 3).join(' | '));
+                mark('探测·形态自动选中', qa('#sec-form input[type=radio]').some(function (r) {
+                  return r.checked && r.parentElement && /docker/.test(r.parentElement.textContent);
+                }));
+                finish();
+              }, 400);
+            }, 500);
           }, 300);
         }
 

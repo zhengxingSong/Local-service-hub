@@ -10,6 +10,7 @@ import { sampleVram } from './gpu-monitor';
 import { ServiceManager } from './service-manager';
 import { migrateUserData } from './user-data-migration';
 import { RunLog } from './run-log';
+import { inspectPath } from './probe';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const APP_TITLE = '服务中枢';
@@ -162,6 +163,19 @@ function registerIpc(): void {
   // 运行记录：每次「启动 → 结束」的起止、就绪耗时与资源峰值
   ipcMain.handle('runs:list', (_e, serviceId?: string, limit?: number) => runLog.list(serviceId, limit));
   ipcMain.handle('runs:clear', (_e, serviceId?: string) => runLog.clear(serviceId));
+
+  // 探测：给一个目录判断它是什么形态（模型 / docker 应用 / 源代码项目）
+  ipcMain.handle('probe:inspect', (_e, path: string) => inspectPath(path));
+
+  ipcMain.handle('probe:pick-directory', async () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return null;
+    const res = await dialog.showOpenDialog(mainWindow, {
+      title: '选择要纳管的目录',
+      properties: ['openDirectory'],
+    });
+    if (res.canceled || res.filePaths.length === 0) return null;
+    return res.filePaths[0];
+  });
 
   ipcMain.handle('app:restore-snapshot', async (_e, name: string) => {
     if (!configStore.restoreSnapshot(name)) return { ok: false };

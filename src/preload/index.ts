@@ -48,6 +48,25 @@ export interface SnapshotInfo {
   reason: string;
 }
 
+/** 探测结果：给一个目录，判断它是什么形态（依据可核对） */
+export interface ProbeResult {
+  path: string;
+  kind: 'llama' | 'command' | 'compose' | 'unknown' | 'missing';
+  evidence: string[];
+  suggestion: {
+    label?: string;
+    model?: string;
+    mmproj?: string;
+    command?: string;
+    cwd?: string;
+    composeDir?: string;
+    composeFile?: string;
+    composeProfiles?: string[];
+    port?: number;
+  };
+  candidates: { label: string; value: string }[];
+}
+
 const api = {
   getConfig: () => ipcRenderer.invoke('app:get-config'),
   saveConfig: (config: unknown) => ipcRenderer.invoke('app:save-config', config),
@@ -66,6 +85,8 @@ const api = {
   restoreSnapshot: (name: string) => ipcRenderer.invoke('app:restore-snapshot', name),
   listRuns: (serviceId?: string, limit?: number) => ipcRenderer.invoke('runs:list', serviceId, limit),
   clearRuns: (serviceId?: string) => ipcRenderer.invoke('runs:clear', serviceId),
+  inspectPath: (path: string) => ipcRenderer.invoke('probe:inspect', path),
+  pickDirectory: () => ipcRenderer.invoke('probe:pick-directory'),
   downloadModel: (req: { name?: string; url?: string; sha256?: string }) => ipcRenderer.invoke('models:download', req),
   cancelDownload: () => ipcRenderer.invoke('models:download-cancel'),
   openLogDir: () => ipcRenderer.invoke('app:open-log-dir'),

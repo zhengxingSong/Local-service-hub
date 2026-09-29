@@ -1,4 +1,4 @@
-import type { AppConfig, DownloadResult, GpuInfo, ModelEntry, RunRecord, ServiceView, SnapshotInfo } from './types';
+import type { AppConfig, DownloadResult, GpuInfo, ModelEntry, ProbeResult, RunRecord, ServiceView, SnapshotInfo } from './types';
 
 export {};
 
@@ -22,6 +22,8 @@ declare global {
       restoreSnapshot: (name: string) => Promise<{ ok: boolean; config?: AppConfig }>;
       listRuns: (serviceId?: string, limit?: number) => Promise<RunRecord[]>;
       clearRuns: (serviceId?: string) => Promise<number>;
+      inspectPath: (path: string) => Promise<ProbeResult>;
+      pickDirectory: () => Promise<string | null>;
       downloadModel: (req: { name?: string; url?: string; sha256?: string }) => Promise<DownloadResult>;
       cancelDownload: () => Promise<boolean>;
       openLogDir: () => Promise<boolean>;

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Settings, LogOut, SlidersHorizontal, ArrowLeft, RefreshCw } from 'lucide-react';
-import { AppConfig, DownloadResult, GpuInfo, ModelEntry, ServiceConfig, ServiceView } from './types';
+import { AppConfig, DownloadResult, GpuInfo, ModelEntry, ProbeResult, ServiceConfig, ServiceKind, ServiceView } from './types';
 import { evaluatePreflight, PreflightAction, PreflightResult } from './preflight';
 import { PreflightDialog } from './components/PreflightDialog';
 import { ServiceCard, basename } from './components/ServiceCard';
@@ -13,6 +13,7 @@ import { SettingsPanel } from './components/SettingsPanel';
 import { ServiceDrawer } from './components/ServiceDrawer';
 import { ToastStack, Toast, TOAST_MAX } from './components/ToastStack';
 import { ConfirmDialog, ConfirmKind, ConfirmRequest } from './components/ConfirmDialog';
+import { ProbeDialog } from './components/ProbeDialog';
 import { Fix } from './diagnose';
 import { DownloadDialog } from './components/DownloadDialog';
 
@@ -39,6 +40,8 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
   const [showDownload, setShowDownload] = useState(false);
+  /** 新增服务前先探测：选目录 → 判断形态 → 用这个形态继续 */
+  const [showProbe, setShowProbe] = useState(false);
   const [logId, setLogId] = useState<string | null>(null);
   const [configNotice, setConfigNotice] = useState(false);
   /** 运行态是默认房间；配置态是显式进出的房间 */
@@ -379,6 +382,27 @@ export function App() {
     if (cfg.port) portOwners[String(cfg.port)] = cfg.label || id;
   }
 
+  /** 探测结果 → 服务编辑的预填值。判断不出来的字段一律不填，留空让人自己填。 */
+  const prefillFromProbe = (r: ProbeResult): ServiceConfig => {
+    const kind: ServiceKind = r.kind === 'compose' ? 'compose' : r.kind === 'command' ? 'command' : 'llama';
+    const base: ServiceConfig = {
+      label: r.suggestion.label ?? '',
+      role: '', model: '', mmproj: '', alias: '',
+      port: r.suggestion.port ?? 0,
+      args: [], autostart: false, enabled: true, kind,
+    };
+    if (kind === 'compose') {
+      return {
+        ...base,
+        composeDir: r.suggestion.composeDir ?? '',
+        composeFile: r.suggestion.composeFile,
+        composeProfiles: r.suggestion.composeProfiles,
+      };
+    }
+    if (kind === 'command') return { ...base, cwd: r.suggestion.cwd, command: r.suggestion.command ?? '' };
+    return { ...base, model: r.suggestion.model ?? '', mmproj: r.suggestion.mmproj ?? '' };
+  };
+
   /** 打开服务编辑（二级页）；id 为 null 表示新增。记住来源，返回时回到进来的那个房间。 */
   const openEditor = (id: string | null) => {
     setEditorFrom(view === 'run' ? 'run' : 'config');
@@ -449,7 +473,7 @@ export function App() {
             models={models}
             busy={busy}
             showModelPanel={showModelPanel}
-            onNewService={() => openEditor(null)}
+            onNewService={() => setShowProbe(true)}
             onEditService={(id) => openEditor(id)}
             onCopyService={copyService}
             onDeleteService={deleteService}
@@ -587,6 +611,21 @@ export function App() {
           openLogDir={() => api.openLogDir()}
           listRuns={(serviceId, limit) => api.listRuns(serviceId, limit)}
           clearRuns={(serviceId) => api.clearRuns(serviceId)}
+        />
+      )}
+
+      {showProbe && (
+        <ProbeDialog
+          onPick={() => api.pickDirectory()}
+          onInspect={(p) => api.inspectPath(p)}
+          onUse={(r) => {
+            setShowProbe(false);
+            setEditorFrom('config');
+            setEditor({ id: null, cfg: prefillFromProbe(r) });
+            setView('editor');
+          }}
+          onSkip={() => { setShowProbe(false); openEditor(null); }}
+          onCancel={() => setShowProbe(false)}
         />
       )}
 

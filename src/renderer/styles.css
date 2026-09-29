@@ -943,6 +943,42 @@ hr.sep { border: none; border-top: 1px solid var(--color-hairline); margin: var(
   border-top: 1px solid var(--color-hairline);
 }
 
+/* ---------- 探测面：选目录 → 判断形态 → 用这个形态继续 ---------- */
+.probe { width: 620px; max-width: calc(100vw - 32px); }
+.probe .panel-title { display: flex; align-items: center; gap: var(--space-xs); }
+.probe-body { padding: var(--space-sm) var(--space-md); display: flex; flex-direction: column; gap: var(--space-xs); max-height: 62vh; overflow-y: auto; }
+.probe-step {
+  display: flex; align-items: center; gap: var(--space-xs);
+  font-size: var(--type-sm-size); font-weight: var(--type-emphasis-weight);
+  padding-top: var(--space-xxs);
+}
+.probe-pick { display: flex; gap: var(--space-xs); align-items: center; }
+.probe-pick .input { flex: 1; min-width: 0; }
+.probe-ev { border: 1px solid var(--color-hairline); padding: var(--space-xs) var(--space-sm); }
+.probe-ev-h { font-size: var(--type-sm-size); color: var(--color-ink-muted); }
+.probe-ev-line {
+  font-size: var(--type-sm-size); color: var(--color-ink); line-height: 1.5;
+  padding-left: var(--space-sm); position: relative;
+}
+.probe-ev-line::before { content: '·'; position: absolute; left: 2px; }
+.probe-sug { display: flex; align-items: center; gap: var(--space-xs); flex-wrap: wrap; }
+.probe-note {
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--color-warning-light);
+  border: 1px solid var(--color-warning-text);
+  font-size: var(--type-sm-size); color: var(--color-ink); line-height: 1.5;
+}
+.kind-badge.kind-compose { border-color: var(--color-primary); color: var(--color-primary); }
+.kind-badge.kind-llama { border-color: var(--color-success); color: var(--color-success); }
+.kind-badge.kind-command { border-color: var(--color-ink-muted); }
+.kind-badge.kind-unknown, .kind-badge.kind-missing { border-color: var(--color-warning-text); color: var(--color-warning-text); }
+.kind-badge { display: inline-flex; align-items: center; gap: var(--space-xxs); }
+.probe-foot {
+  display: flex; align-items: center; gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid var(--color-hairline);
+}
+
 /* ---------- 退化：窄窗口 ---------- */
 @media (max-width: 1180px) {
   .run-grid { grid-template-columns: 1fr; }
