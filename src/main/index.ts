@@ -153,6 +153,19 @@ function registerIpc(): void {
     return config;
   });
 
+  // 配置快照：列出与恢复。恢复走与保存同一条重载路径，避免两套生效逻辑。
+  ipcMain.handle('app:list-snapshots', () => configStore.listSnapshots());
+
+  ipcMain.handle('app:restore-snapshot', async (_e, name: string) => {
+    if (!configStore.restoreSnapshot(name)) return { ok: false };
+    config = configStore.reload();
+    applyLoginItemSettings(config.autostartOnLogin);
+    serviceManager?.updateRuntime(config.llamaServerPath, config.maxRestarts);
+    await serviceManager?.syncServices(config.services);
+    void broadcastStatus();
+    return { ok: true, config };
+  });
+
   ipcMain.handle('services:status', async () => {
     const services = (await serviceManager?.viewAll()) ?? [];
     const gpu = await sampleVram();

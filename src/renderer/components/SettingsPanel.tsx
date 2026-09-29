@@ -1,13 +1,27 @@
-import { useState } from 'react';
-import { AppConfig } from '../types';
+import { useEffect, useState } from 'react';
+import { RotateCcw } from 'lucide-react';
+import { AppConfig, SnapshotInfo } from '../types';
 
 interface Props {
   config: AppConfig;
   onSave: (cfg: AppConfig) => void;
   onCancel: () => void;
+  /** 列出配置快照（最新的在前） */
+  listSnapshots: () => Promise<SnapshotInfo[]>;
+  /** 恢复某个快照；成功时返回恢复后的配置 */
+  restoreSnapshot: (name: string) => Promise<{ ok: boolean; config?: AppConfig }>;
+  /** 恢复成功后把新配置交回上层（并重载服务） */
+  onRestored: (cfg: AppConfig) => void;
 }
 
-export function SettingsPanel({ config, onSave, onCancel }: Props) {
+function fmtTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const p = (n: number): string => String(n).padStart(2, '0');
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+export function SettingsPanel({ config, onSave, onCancel, listSnapshots, restoreSnapshot, onRestored }: Props) {
   const [llamaServerPath, setLlamaServerPath] = useState(config.llamaServerPath);
   const [scanRootsText, setScanRootsText] = useState(config.scanRoots.join('\n'));
   const [modelsRoot, setModelsRoot] = useState(config.modelsRoot ?? '');
@@ -15,6 +29,20 @@ export function SettingsPanel({ config, onSave, onCancel }: Props) {
   const [maxRestarts, setMaxRestarts] = useState(String(config.maxRestarts));
   const [vramWarn, setVramWarn] = useState(String(config.vramWarnThreshold));
   const [autostartOnLogin, setAutostartOnLogin] = useState(config.autostartOnLogin);
+  const [snapshots, setSnapshots] = useState<SnapshotInfo[]>([]);
+  const [snapErr, setSnapErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const refreshSnapshots = async () => {
+    try {
+      setSnapshots(await listSnapshots());
+      setSnapErr(null);
+    } catch (err) {
+      setSnapErr(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  useEffect(() => { void refreshSnapshots(); /* 打开时读一次即可 */ }, []);
 
   const save = () => {
     onSave({
@@ -29,6 +57,29 @@ export function SettingsPanel({ config, onSave, onCancel }: Props) {
     });
   };
 
+  const restore = async (snap: SnapshotInfo) => {
+    const when = fmtTime(snap.createdAt);
+    if (!window.confirm(
+      `恢复到 ${when} 的快照？\n\n` +
+      `当前配置会被覆盖，但覆盖前会自动再存一份（所以这一步可逆）。\n` +
+      `恢复后正在运行、但新配置里不存在的服务会被停止。`,
+    )) return;
+    setBusy(true);
+    try {
+      const res = await restoreSnapshot(snap.name);
+      if (!res.ok || !res.config) {
+        setSnapErr('恢复失败：快照不存在或不可读');
+      } else {
+        onRestored(res.config);
+        await refreshSnapshots();
+      }
+    } catch (err) {
+      setSnapErr(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const llamaConfigured = Boolean(llamaServerPath.trim() || scanRootsText.trim());
 
   return (
@@ -39,6 +90,7 @@ export function SettingsPanel({ config, onSave, onCancel }: Props) {
           <button className="btn small ghost" onClick={onCancel}>关闭</button>
         </div>
 
+        <div className="sec-h"><span className="sec-no">①</span> 能力</div>
         <div className="form-row">
           <label>llama-server.exe 路径（可选）</label>
           <input className="input" value={llamaServerPath} onChange={(e) => setLlamaServerPath(e.target.value)} placeholder="留空则不使用 llama 能力" />
@@ -56,6 +108,7 @@ export function SettingsPanel({ config, onSave, onCancel }: Props) {
           <input className="input" value={modelsRoot} onChange={(e) => setModelsRoot(e.target.value)} placeholder="留空时使用「扫描根目录\llama.cpp\models」" />
         </div>
 
+        <div className="sec-h"><span className="sec-no">②</span> 运行</div>
         <div className="form-row">
           <label>界面</label>
           <label className="check-row">
@@ -80,6 +133,44 @@ export function SettingsPanel({ config, onSave, onCancel }: Props) {
           <input type="checkbox" checked={autostartOnLogin} onChange={(e) => setAutostartOnLogin(e.target.checked)} />
           随 Windows 登录自动启动应用
         </label>
+
+        <div className="sec-h">
+          <span className="sec-no">③</span> 配置快照
+          <span className="sec-note">改动前自动生成 · 保留最近 10 份</span>
+        </div>
+        {snapErr && <div className="banner error">{snapErr}</div>}
+        {snapshots.length === 0 ? (
+          <span className="hint">还没有快照。第一次保存设置或服务后会自动生成。</span>
+        ) : (
+          <table className="cfg-table">
+            <thead>
+              <tr>
+                <th style={{ width: 120 }}>时间</th>
+                <th style={{ width: 120 }}>原因</th>
+                <th style={{ width: 90 }}>大小</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {snapshots.map((s) => (
+                <tr key={s.name}>
+                  <td><span className="cfg-mono">{fmtTime(s.createdAt)}</span></td>
+                  <td>{s.reason}</td>
+                  <td><span className="cfg-mono">{(s.sizeBytes / 1024).toFixed(1)} KB</span></td>
+                  <td>
+                    <button className="btn small" disabled={busy} onClick={() => void restore(s)}>
+                      <RotateCcw size={13} /> 恢复
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <span className="hint">
+          快照是「改坏了能退回去」的退路，不是备份系统：它只保留配置文件本身，
+          不含模型文件与日志。恢复前会自动再存一份当前配置，因此恢复本身也可逆。
+        </span>
 
         <div className="form-actions">
           <button className="btn ghost" onClick={onCancel}>取消</button>

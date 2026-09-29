@@ -1,4 +1,4 @@
-import type { AppConfig, DownloadResult, GpuInfo, ModelEntry, ServiceView } from './types';
+import type { AppConfig, DownloadResult, GpuInfo, ModelEntry, ServiceView, SnapshotInfo } from './types';
 
 export {};
 
@@ -18,6 +18,8 @@ declare global {
       promote: (req: { trialId: string; id?: string }) => Promise<AppConfig>;
       dropTrial: (trialId: string) => Promise<boolean>;
       reloadConfig: () => Promise<{ restarted: string[] }>;
+      listSnapshots: () => Promise<SnapshotInfo[]>;
+      restoreSnapshot: (name: string) => Promise<{ ok: boolean; config?: AppConfig }>;
       downloadModel: (req: { name?: string; url?: string; sha256?: string }) => Promise<DownloadResult>;
       cancelDownload: () => Promise<boolean>;
       openLogDir: () => Promise<boolean>;

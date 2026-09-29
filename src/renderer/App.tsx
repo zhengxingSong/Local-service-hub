@@ -433,7 +433,14 @@ export function App() {
       </main>
 
       {showSettings && config && (
-        <SettingsPanel config={config} onSave={(cfg) => { saveConfig(cfg); setShowSettings(false); }} onCancel={() => setShowSettings(false)} />
+        <SettingsPanel
+          config={config}
+          onSave={(cfg) => { saveConfig(cfg); setShowSettings(false); }}
+          onCancel={() => setShowSettings(false)}
+          listSnapshots={() => api.listSnapshots()}
+          restoreSnapshot={(name) => api.restoreSnapshot(name)}
+          onRestored={(cfg) => setConfig(cfg)}
+        />
       )}
 
       {showPresets && config && (

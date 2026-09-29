@@ -110,6 +110,13 @@
           promote: function () { return Promise.resolve(config); },
           dropTrial: function () { return Promise.resolve(true); },
           reloadConfig: function () { return Promise.resolve({ restarted: [] }); },
+          listSnapshots: function () {
+            return Promise.resolve([
+              { name: 'services.json.bak-20260929080900000', createdAt: '2026-09-29T08:09:00.000Z', sizeBytes: 3120, reason: '保存前' },
+              { name: 'services.json.bak-20260923072100000', createdAt: '2026-09-23T07:21:00.000Z', sizeBytes: 2980, reason: '旧版迁移' }
+            ]);
+          },
+          restoreSnapshot: function () { return Promise.resolve({ ok: true, config: config }); },
           downloadModel: function () { return Promise.resolve({ ok: true, path: 'x.gguf', sha256Verified: true }); },
           cancelDownload: function () { return Promise.resolve(true); },
           openLogDir: function () { return Promise.resolve(true); },
@@ -213,7 +220,20 @@
                   mark('Carbon·服务编辑 0px 圆角', qa('.sec, .edit-nav').every(function (e) {
                     return getComputedStyle(e).borderTopLeftRadius === '0px';
                   }));
-                  finish();
+                  var setBtn = byText('设置');
+                  if (!setBtn) { out.push('MISS | 找不到「设置」入口'); finish(); return; }
+                  setBtn.click();
+                  setTimeout(function () {
+                    mark('设置·面板打开', !!q('.modal') && txt('.modal').indexOf('全局设置') >= 0);
+                    mark('设置·三段结构', qa('.modal .sec-h').length === 3, qa('.modal .sec-h').length + ' 段');
+                    mark('设置·快照表列出历史', qa('.modal .cfg-table tbody tr').length === 2, qa('.modal .cfg-table tbody tr').length + ' 行');
+                    mark('设置·快照带原因与恢复键', txt('.modal').indexOf('保存前') >= 0 && qa('.modal button').some(function (b) { return /恢复/.test(b.textContent); }));
+                    mark('设置·快照说明写明可逆', txt('.modal').indexOf('恢复本身也可逆') >= 0);
+                    mark('Carbon·设置 0px 圆角', qa('.modal .sec-h, .modal .cfg-table').every(function (e) {
+                      return getComputedStyle(e).borderTopLeftRadius === '0px';
+                    }));
+                    finish();
+                  }, 300);
                 }, 300);
               }, 250);
             }, 250);

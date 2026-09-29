@@ -59,6 +59,14 @@ export interface DownloadResult {
   sha256Verified?: boolean;
 }
 
+/** 配置快照：配置文件的历史副本 */
+export interface SnapshotInfo {
+  name: string;
+  createdAt: string;
+  sizeBytes: number;
+  reason: string;
+}
+
 export interface ServiceConfig {
   label: string;
   role: string;

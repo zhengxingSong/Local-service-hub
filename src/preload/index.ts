@@ -40,6 +40,14 @@ export interface DownloadProgress {
   totalBytes: number;
 }
 
+/** 配置快照：配置文件的历史副本，用于「改坏了能退回去」 */
+export interface SnapshotInfo {
+  name: string;
+  createdAt: string;
+  sizeBytes: number;
+  reason: string;
+}
+
 const api = {
   getConfig: () => ipcRenderer.invoke('app:get-config'),
   saveConfig: (config: unknown) => ipcRenderer.invoke('app:save-config', config),
@@ -54,6 +62,8 @@ const api = {
   promote: (req: { trialId: string; id?: string }) => ipcRenderer.invoke('services:promote', req),
   dropTrial: (trialId: string) => ipcRenderer.invoke('services:drop-trial', trialId),
   reloadConfig: () => ipcRenderer.invoke('app:reload-config'),
+  listSnapshots: () => ipcRenderer.invoke('app:list-snapshots'),
+  restoreSnapshot: (name: string) => ipcRenderer.invoke('app:restore-snapshot', name),
   downloadModel: (req: { name?: string; url?: string; sha256?: string }) => ipcRenderer.invoke('models:download', req),
   cancelDownload: () => ipcRenderer.invoke('models:download-cancel'),
   openLogDir: () => ipcRenderer.invoke('app:open-log-dir'),
