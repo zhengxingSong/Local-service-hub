@@ -538,6 +538,15 @@ a{color:var(--color-primary);text-decoration:none}
 .legend i{width:8px;height:8px;display:inline-block;border:1px solid var(--color-hairline)}
 
 .bullets{display:flex;flex-direction:column;gap:var(--space-xs)}
+/* 资源面的占用者行：名称 / 归属 / 占用 / 来源四项一行，行高固定，避免换行把面板撑高 */
+.occrow{
+  display:grid;grid-template-columns:12px 62px 1fr auto auto;align-items:center;
+  gap:var(--space-xs);padding:3px 0;border-top:1px solid var(--color-hairline);
+}
+.occrow:first-child{border-top:0}
+.occrow .nm{font-size:var(--type-body-sm-size);font-weight:600}
+.occrow .ow{font-size:11px;color:var(--color-ink-muted)}
+.occrow .num{font-size:var(--type-caption-size);text-align:right}
 .bullets li{display:grid;grid-template-columns:14px 1fr;gap:var(--space-xs);align-items:start}
 .bullets .mk{font-family:var(--type-mono-font);font-size:12px;line-height:1.5;color:var(--color-ink-muted)}
 .bullets .mk.ok{color:var(--color-success)}
@@ -1864,7 +1873,7 @@ var MODE_CHIP_CLS = { real:'', trouble:'alt', switch:'alt' };
    ═══════════════════════════════════════════════════════════════════════════ */
 function ovState(){
   if (SCENARIO==='trouble') return { state:'部分可用 3/4', lamp:'warn', members:{vlm:'ok',embedding:'ok',intent:'ok','ov-server':'bad'},
-    err:'ov-server 未就绪：依赖 intent 超时（等待 30s 后放弃，退出码 3）' };
+    err:'ov-server 未就绪：依赖 intent 就绪超时（等待 30s 后放弃，退出码 3）' };
   if (SCENARIO==='switch' || RELEASED) return { state:'停止中 2/4', lamp:'busy', members:{vlm:'stop',embedding:'stop',intent:'busy','ov-server':'idle'},
     prog:'正在逆序退场：已停 vlm(11435) 与 embedding(11436)；等 intent 退出并释放 11437 与显存' };
   return { state:'可用 4/4', lamp:'ok', members:{vlm:'ok',embedding:'ok',intent:'ok','ov-server':'ok'} };
@@ -1921,7 +1930,7 @@ function memberRow(id, st){
     acts = '<button class="btn xs nu" disabled'
       + ' data-fn="切换进行中：成员动作暂时不可用 —— 等事务结束，或中止并回滚。" data-cond="非切换中">—</button>';
   }
-  return '<div class="mrow">'
+  return '<div class="mrow"' + (id==='ov-server' ? ' data-id="member-ov-server"' : '') + '>'
     + '<span class="lamp ' + lamp + '"></span>'
     + '<span class="nm">' + id + '</span>'
     + '<span class="port">' + s.port + '</span>'
@@ -1961,7 +1970,9 @@ function renderRigs(){
         + ' data-fn="停用：逆序停止全部成员。若成员被其它运行中的组共用，会先提示共用者再决定。"'
         + ' data-cond="可用 / 部分可用" data-rel="rig-ov">停用</button>';
     }
-    return '<div class="rig ' + c.lamp + '" id="rig-' + c.id + '" data-target="rig-' + c.id + '">'
+    return '<div class="rig ' + c.lamp + '" id="rig-' + c.id + '" data-target="rig-' + c.id + '"'
+      + ' data-fn="用途卡：一个用途（一个预设组，或一个未分组服务）的全部决策信息。只放可用性、成员就绪进度、异常原因与占用来源；日志与运行记录进服务抽屉。"'
+      + ' data-cond="恒显示" data-rel="resPanel">'
       + '<div class="rig-h">'
       +   '<span class="lamp ' + c.lamp + '"></span>'
       +   '<span class="ttl"><span class="nm">' + c.name + '</span>'
@@ -1980,12 +1991,19 @@ function renderRigs(){
       +       ' data-fn="随应用启动：应用启动时按组内顺序自动拉起本组，并逐个等就绪。它属于策略，不属于每次操作。"'
       +       ' data-cond="组成员 ≥ 1" data-rel="sec-6"><span class="bx"></span></span>'
       +     mid
+      +     (function(){
+            var n = Object.keys(c.members).length;
+            var ready = Object.keys(c.members).filter(function(k){ return c.members[k]==='ok'; }).length;
+            return '<button class="btn s gh" data-strip="' + c.id + '" aria-expanded="false"'
+              + ' data-fn="展开 / 收起成员明细：只展开到成员行（状态、端口、实测占用、单服务动作），日志与运行记录留在服务抽屉 —— 这是「运行态一眼看清哪个用途能用」与「细节不挤走列表」之间的分工。"'
+              + ' data-cond="恒可用" data-rel="rig-' + c.id + '">成员 <span class="num">' + ready + '/' + n + '</span> <span class="stripcaret">▸</span></button>';
+          })()
       +     '<button class="btn s gh" data-toast="info|菜单：重启整组 / 编辑组 / 解散组（解散只解除组合，不删除任何服务）"'
       +       ' data-fn="溢出菜单：重启整组 / 编辑组 / 解散组。编辑与解散恒可用，重启整组需已运行。" data-cond="恒可用" data-rel="m-group">⋯</button>'
       +   '</span>'
       + '</div>'
       + errBlock + progBlock
-      + '<div class="mstrip">' + Object.keys(c.members).map(function(id){ return memberRow(id, c.members[id]); }).join('') + '</div>'
+      + '<div class="mstrip" id="strip-' + c.id + '" hidden>' + Object.keys(c.members).map(function(id){ return memberRow(id, c.members[id]); }).join('') + '</div>'
       + '</div>';
   }).join('');
 }
@@ -2044,37 +2062,35 @@ function renderRes(){
     +     '<span class="grow"></span><span class="chip ' + (pct>=90?'bad':pct>=70?'warn':'ok') + '"><span class="sq"></span><span class="num">' + pct + '%</span> · 阈值 90%</span></div>'
     +   '<div style="margin-top:var(--space-xs)"><div class="scale">' + segs() + '</div>' + markLine() + legend() + '</div>'
     +   (rel
-        ? '<div class="note" style="margin-top:var(--space-xs)">切换事务：OpenViking 组正在逆序退场，已释放约 <b class="num">4.1 GB</b>，还需再释放 <b class="num">4.1 GB</b> 才够聊天组的 <b class="num">18.7 GB</b>。</div>'
-        : '<div class="note" style="margin-top:var(--space-xs)">差值 = 需求 <b class="num">18.7 GB</b> − 余量 <b class="num">' + freeGB + ' GB</b> = <b class="num" style="color:var(--color-error)">' + gapGB + ' GB</b>。停掉 OpenViking 组可释放 <b class="num">8.1 GB</b>，正好跨过需求线。</div>')
-    +   '<div class="note">账目对上：<b class="num">6448 + 678 + 867 + 320 = 8313 MB</b>（OpenViking 组）+ <b class="num">1310 MB</b>（其它进程）= <b class="num">9623 MiB</b> = nvidia-smi 实测。</div>'
+        ? '<div class="note" style="margin-top:var(--space-xxs)">切换事务：已释放约 <b class="num">4.1 GB</b>，还需再释放 <b class="num">4.1 GB</b> 才够聊天组的 <b class="num">18.7 GB</b>。<br>账目：<b class="num">8313</b>（OpenViking 组）+ <b class="num">1310</b>（其它）= <b class="num">9623 MiB</b>。</div>'
+        : '<div class="note" style="margin-top:var(--space-xxs)">差值 = <b class="num">18.7 GB</b> − 余量 <b class="num">' + freeGB + ' GB</b> = <b class="num" style="color:var(--color-error)">' + gapGB + ' GB</b>；停 OpenViking 组释放 <b class="num">8.1 GB</b> 即跨过需求线。<br>账目：<b class="num">6448+678+867+320 = 8313</b>（OpenViking 组）+ <b class="num">1310</b>（其它）= <b class="num">9623 MiB</b> = nvidia-smi 实测。</div>')
     + '</div></div>'
 
     + '<div class="pnl">'
-    + '<div class="pnl-h"><span class="lg">occupants</span><span class="tt">占用者 · 来源可信度</span></div>'
-    + '<div class="pnl-b" style="padding-top:var(--space-xs)">'
-    + '<table class="tbl"><colgroup><col><col style="width:76px"><col style="width:52px"></colgroup>'
-    + '<thead><tr><th>占用者</th><th>归属</th><th class="r">MB</th></tr></thead><tbody>'
+    + '<div class="pnl-h"><span class="lg">occupants</span><span class="tt">占用者</span><span class="grow"></span>'
+    + '<span class="card-sub">占用 / 组</span></div>'
+    + '<div class="pnl-b" style="padding-top:var(--space-xxs)">'
     + rows.map(function(r){
-        return '<tr><td><span class="cellwrap"><span class="lamp ' + (r[4]==='已停'?'idle':r[4]==='停止中'?'busy':'ok') + '"></span>'
-          + '<span class="nm ell">' + r[0] + '</span></span></td>'
-          + '<td><span class="ell" style="color:var(--color-ink-muted)">' + r[3] + '</span></td>'
-          + '<td class="r"><span class="num">' + r[1] + '</span> <span class="src ' + (r[4]==='推算'?'calc':r[4]==='估算'?'est':'meas') + '">' + r[4] + '</span></td></tr>';
+        return '<div class="occrow">'
+          + '<span class="lamp ' + (r[4]==='已停'?'idle':r[4]==='停止中'?'busy':'ok') + '"></span>'
+          + '<span class="nm ell">' + r[0] + '</span>'
+          + '<span class="ow ell">' + r[3] + '</span>'
+          + '<span class="num">' + r[1] + '</span>'
+          + '<span class="src ' + (r[4]==='推算'?'calc':r[4]==='估算'?'est':'meas') + '">' + r[4] + '</span>'
+          + '</div>';
       }).join('')
-    + '</tbody></table>'
-    + '<div class="note" style="margin-top:var(--space-xs)">可信度三层（实测 / 估算 / 推算）混用同一视觉，比不做预检更危险 —— 所以每个数字都带来源标记。</div>'
     + '</div></div>'
 
     + '<div class="pnl">'
     + '<div class="pnl-h"><span class="lg">decision</span><span class="tt">按当前余量</span></div>'
     + '<div class="pnl-b"><ul class="bullets">'
     + '<li><span class="mk ok">✓</span><span>现在可启动：<b>Rerank</b> · <b>WeKnora</b> · <b>Laya</b>'
-    +   '<span class="note">三个单成员用途，最大需求是 reranker 的 423 MB，远低于余量 ' + (rel?'10.5':'14.6') + ' GB。</span></span></li>'
+    +   '<span class="note">最大需求 423 MB，远低于余量 ' + (rel?'10.5':'14.6') + ' GB。</span></span></li>'
     + '<li><span class="mk warn">!</span><span>需先释放：<b>聊天组</b>'
-    +   '<span class="note">需 <b class="num">18.7 GB</b>，余量 <b class="num">' + (rel?'10.5':freeGB) + ' GB</b>，差 <b style="color:var(--color-error)">' + (rel?'8.2':gapGB) + ' GB</b>。停 OpenViking 组可释放 <b class="num">8.1 GB</b>。</span></span></li>'
-    + '<li><span class="mk">·</span><span>其它资源：内存 <b class="num">' + RAM.used + ' / ' + RAM.total + ' GB</b> · CPU ' + CPU
-    +   '<span class="note">磁盘 ' + DISK.map(function(d){ return d[0] + ' ' + d[1] + '/' + d[2]; }).join(' · ') + ' GB</span></span></li>'
+    +   '<span class="note">需 <b class="num">18.7 GB</b>，余量 <b class="num">' + (rel?'10.5':freeGB) + ' GB</b>，差 <b style="color:var(--color-error)">' + (rel?'8.2':gapGB) + ' GB</b>。</span></span></li>'
+    + '<li><span class="mk">·</span><span>其它：内存 <b class="num">' + RAM.used + ' / ' + RAM.total + ' GB</b> · ' + CPU
+    +   '<span class="note">磁盘 ' + DISK.map(function(d){ return d[0] + ' ' + d[1] + '/' + d[2]; }).join(' · ') + ' GB · 阈值 90%，当前 <b class="num">' + pct + '%</b> 未触发。</span></span></li>'
     + '</ul>'
-    + '<div class="note" style="margin-top:var(--space-xs)">资源告警阈值 90%，当前 <b class="num">' + pct + '%</b>，未触发 B2 内联条。</div>'
     + '</div></div>'
 
     + '<div class="pnl">'
@@ -2363,6 +2379,9 @@ function setTab(t){
 }
 function setScenario(sc){
   SCENARIO = sc;
+  /* 「真实状态」是一次复位：链路 9 点过「停掉它」之后，切换事务必须随之作废 ——
+     否则演示会卡在「停止中 2/4」，用户回不到本机的真实读数。 */
+  if (sc === 'real') RELEASED = false;
   $$('.pv [data-sc]').forEach(function(b){ b.setAttribute('aria-pressed', String(b.getAttribute('data-sc') === sc)); });
   var chip = $('#modeChip');
   chip.className = 'modechip ' + (MODE_CHIP_CLS[sc] || '');
@@ -2481,6 +2500,18 @@ function handleClick(e){
     el.setAttribute('aria-expanded', String(open === '1'));
     var caret = $('.caret', el);
     if (caret) caret.textContent = open === '1' ? '▾' : '▸';
+    acted = true;
+  }
+  /* n2 · 用途卡成员明细折叠（默认折起，展开只到成员行） */
+  if (el.hasAttribute('data-strip')) {
+    var strip = document.getElementById('strip-' + el.getAttribute('data-strip'));
+    if (strip) {
+      var shown = !strip.hasAttribute('hidden');
+      if (shown) strip.setAttribute('hidden', ''); else strip.removeAttribute('hidden');
+      el.setAttribute('aria-expanded', String(!shown));
+      var sc = $('.stripcaret', el);
+      if (sc) sc.textContent = shown ? '▸' : '▾';
+    }
     acted = true;
   }
   /* o · 段跳转 */
@@ -2622,6 +2653,9 @@ document.addEventListener('click', function(e){
   if (!document.body.classList.contains('spec')) return;
   var el = e.target.closest('[data-fn]');
   if (!el) return;
+  /* 预览外壳不是被设计的对象，它的按钮必须保持可用——否则标注模式一打开，
+     「退出标注」自己就被吞掉了，模式无法退出。 */
+  if (el.closest('.pv-bar') || el.closest('.pv-foot') || el.closest('#specpanel')) return;
   e.preventDefault();
   e.stopPropagation();
   if (PINNED === el) { clearSpec(); return; }

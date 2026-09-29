@@ -52,7 +52,7 @@ cd docs\design\preview
 | ui-v2-hallmark.html | 153 467 | 1 967 | 130 | 0 | `card-ov`/`card-chat`/`row-reranker`（同上，运行期 53/53 命中） | **30 / 30** |
 | ui-v3-impeccable.html | 152 942 | 1 912 | 69 | 0 | 无 | **30 / 30** |
 | ui-l1-linear.html | 135 215 | 1 670 | 127 | 0 | 无 | **30 / 30** |
-| ui-l2-carbon.html | 188 160 | 2 660 | 188 | 0 | 无 | **30 / 30** |
+| ui-l2-carbon.html | 190 556 | 2 695 | 188 | 0 | 无 | **30 / 30** |
 | ui-l3-clickhouse.html | 157 639 | 1 985 | 137 | 0 | 无 | **30 / 30** |
 
 ### V3 的现代精修（refinement，未改结构与交互）
@@ -98,7 +98,7 @@ cd docs\design\preview
 | 深度 | 禁用真黑（`#010102`），投影只在模态/抽屉/Toast ✅ | `--elev-panel` 只落在 `.win`/`.mw`/`.drawer`/`.toast`，**没有卡片用它** ✅ | 零投影，只有 1 处 `--shadow-window` 给窗口框 ✅ |
 | 排版签名 | 负字距以令牌实现（`--ls-display-md:-0.8px`）· **全表无 700+** ✅ | `weight 300` 展示字真的存在 · 正文 `0.16px` · 眉标 sentence case ✅ | 700 只用于 display/stat（`stat-display` 字距 **-1.5px 原值不减**）· **无 500 标题** ✅ |
 | 渐变 | 0 处 ✅ | 2 处但都是**功能性斜纹**（"待定"段与量程槽），非氛围渐变 ⚠️ 属扩展 | 1 处功能性斜纹 ⚠️ 属扩展 |
-| 唯一发现的偏离 | 发丝边框 1.24–1.36:1（参照自身规格） | **`.pnl-h .lg` 一处全大写加字距标签**违反"眉标须 sentence case" | `--rounded-md` 7px vs 参照 8px（已声明） |
+| 唯一发现的偏离 | 发丝边框 1.24–1.36:1（参照自身规格） | **`.pnl-h .lg` 一处全大写加字距的小节标签**违反"眉标与章节标签须 sentence case"（它的 `.eyebrow` 本身是合规的句首大写；这条我按最终文件复验后仍然成立） | `--rounded-md` 7px vs 参照 8px（已声明） |
 
 ### 一个跨三版的共同发现（值得你决策）
 
