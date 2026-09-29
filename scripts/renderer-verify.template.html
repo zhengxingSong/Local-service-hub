@@ -122,6 +122,50 @@
     </script>
     <script type="module" crossorigin src="./assets/__JS__"></script>
     <link rel="stylesheet" crossorigin href="./assets/__CSS__">
+    <!--
+      结构探针：渲染完成后断言真实应用的 DOM 结构与 Carbon 不变式，
+      结果写进 <pre id="dshverifyout">，由 shot-renderer.ps1 -Probe 用 --dump-dom 取回。
+      （Chrome 的 --dump-dom 不输出 console，所以必须写进 DOM。）
+    -->
+    <script>
+      window.addEventListener('load', function () {
+        setTimeout(function () {
+          var out = [];
+          function q(s) { return document.querySelector(s); }
+          function qa(s) { return Array.prototype.slice.call(document.querySelectorAll(s)); }
+          function txt(s) { var e = q(s); return e ? e.innerText.replace(/\s+/g, ' ') : ''; }
+          function mark(n, ok, extra) { out.push((ok ? 'PASS' : 'FAIL') + ' | ' + n + (extra ? ' | ' + extra : '')); }
+
+          var purposes = qa('.purpose');
+          mark('渲染·用途卡（2 个预设组）', purposes.length === 2, purposes.length + ' 张');
+          mark('渲染·未分组服务的单成员卡（3 个）', qa('.cards .card').length === 3, qa('.cards .card').length + ' 张');
+          mark('渲染·用途卡可展开', qa('.purpose-toggle').length === purposes.length);
+          mark('渲染·成员行存在', qa('.member').length >= 1, qa('.member').length + ' 行（默认展开的单成员用途）');
+
+          mark('账本·存在', !!q('.ledger') && txt('.ledger-head').indexOf('资源') >= 0);
+          mark('账本·显存读数', /GB/.test(txt('.ledger-sub')), txt('.ledger-sub').slice(0, 48));
+          mark('账本·占用者与其它进程', qa('.ledger-item').length >= 5, qa('.ledger-item').length + ' 行');
+          mark('账本·可启动与差容量兼有', qa('.ledger-fit.ok').length >= 1 && qa('.ledger-fit.bad').length >= 1,
+            '可启动 ' + qa('.ledger-fit.ok').length + ' · 差容量 ' + qa('.ledger-fit.bad').length);
+          mark('账本·占用来源标注', qa('.ledger-src').length >= 1, qa('.ledger-src').length + ' 处');
+
+          mark('Carbon·0px 圆角', qa('.purpose, .ledger, .btn').every(function (e) {
+            return getComputedStyle(e).borderTopLeftRadius === '0px';
+          }));
+          mark('Carbon·卡片无投影', qa('.purpose, .ledger, .card').every(function (e) {
+            return getComputedStyle(e).boxShadow === 'none';
+          }));
+          mark('Carbon·无渐变底', getComputedStyle(document.body).backgroundImage === 'none');
+          mark('Carbon·正文 0.16px 字距', getComputedStyle(document.body).letterSpacing === '0.16px',
+            getComputedStyle(document.body).letterSpacing);
+
+          var pre = document.createElement('pre');
+          pre.id = 'dshverifyout';
+          pre.textContent = out.join('\n');
+          document.body.appendChild(pre);
+        }, 400);
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>

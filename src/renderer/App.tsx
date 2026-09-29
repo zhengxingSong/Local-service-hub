@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Settings, LogOut, Plus, Download, HardDrive, RefreshCw } from 'lucide-react';
+import { Settings, LogOut, Plus, Download, RefreshCw } from 'lucide-react';
 import { AppConfig, DownloadResult, GpuInfo, ModelEntry, ServiceConfig, ServiceView } from './types';
 import { ServiceCard, basename, formatSize } from './components/ServiceCard';
-import { PresetBar } from './components/PresetBar';
+import { PurposeCard } from './components/PurposeCard';
+import { ResourceLedger } from './components/ResourceLedger';
 import { PresetManager } from './components/PresetManager';
 import { ServiceEditor } from './components/ServiceEditor';
 import { SettingsPanel } from './components/SettingsPanel';
@@ -149,6 +150,29 @@ export function App() {
     for (const id of members) void doAction(() => api.stop(id), `已停止 ${id}`);
   };
 
+  /** 重启整组：先逆序停止运行中的成员，再按成员顺序启动 */
+  const restartPreset = async (members: string[]) => {
+    for (const s of [...services].reverse()) {
+      if (members.includes(s.id) && s.state === 'running') {
+        await doAction(() => api.stop(s.id), `已停止 ${s.id}`);
+      }
+    }
+    for (const id of members) void doAction(() => api.start(id), `已启动 ${id}`);
+  };
+
+  /** 解散组：只解除组合关系，不删除任何服务 */
+  const dissolvePreset = (name: string) => {
+    if (!config) return;
+    if (!window.confirm(`解散预设组「${name}」？\n\n只解除组合关系，不会删除任何服务。`)) return;
+    const presets = { ...config.presets };
+    delete presets[name];
+    saveConfig({
+      ...config,
+      presets,
+      exclusivePresets: (config.exclusivePresets ?? []).filter((n) => n !== name),
+    });
+  };
+
   const startTrial = async (m: ModelEntry) => {
     await doAction(() => api.startTrial(m.path, m.siblingMmproj ?? undefined), `已临时启动 ${basename(m.path)}`);
   };
@@ -196,14 +220,31 @@ export function App() {
     }
   };
 
-  const serviceStates = Object.fromEntries(services.map((s) => [s.id, s.state]));
-
-  const gpuPct = gpu && gpu.totalMB > 0 ? Math.round((gpu.usedMB / gpu.totalMB) * 100) : 0;
   const warnThreshold = config?.vramWarnThreshold ?? 90;
 
   // 未配置成服务的模型（模型库一键体验）
   const configuredModels = new Set(Object.values(config?.services ?? {}).map((s) => s.model).filter(Boolean));
   const freeModels = models.filter((m) => !configuredModels.has(m.path));
+
+  // 用途卡分组：一个预设组 = 一个用途；未分组服务各自成为一个单成员用途
+  const byId: Record<string, ServiceView> = Object.fromEntries(services.map((s) => [s.id, s]));
+  const presetEntries = Object.entries(config?.presets ?? {});
+  const groupedIds = new Set(presetEntries.flatMap(([, ids]) => ids));
+  const ungrouped = services.filter((s) => !groupedIds.has(s.id));
+
+  // 共用提示：某个成员同时被其它「正在运行的用途」包含，停组时要说清
+  const runningPresetNames = presetEntries
+    .filter(([, ids]) => ids.some((id) => byId[id]?.state === 'running'))
+    .map(([n]) => n);
+  const sharedWith: Record<string, string[]> = {};
+  for (const [name, ids] of presetEntries) {
+    for (const id of ids) {
+      const others = runningPresetNames.filter(
+        (n) => n !== name && (config?.presets[n] ?? []).includes(id),
+      );
+      if (others.length > 0) sharedWith[id] = others;
+    }
+  }
 
   return (
     <div className="app">
@@ -226,33 +267,6 @@ export function App() {
             <button className="btn small primary" onClick={() => void applyReloadedConfig()}><RefreshCw size={13} /> 应用</button>
             <button className="btn small ghost" onClick={() => setConfigNotice(false)}>忽略</button>
           </div>
-        )}
-
-        {gpu && (
-          <div className="gpu-card">
-            <div className="gpu-head">
-              <HardDrive size={18} />
-              <span>GPU 显存</span>
-            </div>
-            <div className="gpu-bar">
-              <div className={`gpu-fill${gpuPct >= warnThreshold ? ' warn' : ''}`} style={{ width: `${Math.min(gpuPct, 100)}%` }} />
-            </div>
-            <div className="gpu-meta">
-              <span><b>{gpu.usedMB}</b> / {gpu.totalMB} MB · {gpuPct}%</span>
-              {gpuPct >= warnThreshold && <span className="gpu-warn-tag">⚠️ 显存紧张</span>}
-            </div>
-          </div>
-        )}
-
-        {config && Object.keys(config.presets).length > 0 && (
-          <PresetBar
-            presets={config.presets}
-            serviceStates={serviceStates}
-            busy={busy}
-            onStartPreset={(name, members) => void startPreset(name, members)}
-            onStopPreset={stopPreset}
-            onEditPresets={() => setShowPresets(true)}
-          />
         )}
 
         {showModelPanel && (
@@ -281,47 +295,82 @@ export function App() {
           </div>
         )}
 
-        <div className="toolbar">
-          <button className="btn primary" onClick={() => setEditor({ id: null, cfg: null })}><Plus size={15} /> 新增服务</button>
-          <span className="count">
-            {services.length} 个服务
-            {showModelPanel && ` · ${models.length} 个可加载模型`}
-          </span>
-        </div>
+        <div className="run-grid">
+          <div className="run-main">
+            <div className="list-head">
+              <span className="list-title">用途</span>
+              <span className="count">
+                {services.length} 个服务 · {presetEntries.length + ungrouped.length} 个用途
+                {showModelPanel && ` · ${models.length} 个可加载模型`}
+              </span>
+              <span className="list-spacer" />
+              <button className="btn small ghost" onClick={() => setEditor({ id: null, cfg: null })}>
+                <Plus size={14} /> 新增服务
+              </button>
+            </div>
 
-        {services.length === 0 ? (
-          <div className="empty">
-            暂无服务。点击「新增服务」添加 llama.cpp 模型服务、任意命令进程或 Docker Compose 容器栈。
+            {services.length === 0 && (
+              <div className="empty">
+                暂无服务。点击「新增服务」添加 llama.cpp 模型服务、任意命令进程或 Docker Compose 容器栈。
+              </div>
+            )}
+
+            {presetEntries.map(([name, ids]) => {
+              const members = ids.map((id) => byId[id]).filter((s): s is ServiceView => Boolean(s));
+              if (members.length === 0) return null;
+              return (
+                <PurposeCard
+                  key={name}
+                  name={name}
+                  members={members}
+                  exclusive={(config?.exclusivePresets ?? []).includes(name)}
+                  sharedWith={sharedWith}
+                  busy={busy}
+                  onEnable={() => void startPreset(name, ids)}
+                  onDisable={() => stopPreset(name, ids)}
+                  onRestartAll={() => void restartPreset(ids)}
+                  onEditGroup={() => setShowPresets(true)}
+                  onDissolve={() => dissolvePreset(name)}
+                  onStartMember={(id) => void doAction(() => api.start(id), '服务已启动')}
+                  onStopMember={(id) => void doAction(() => api.stop(id), '服务已停止')}
+                  onDetail={(id) => setLogId(id)}
+                />
+              );
+            })}
+
+            {ungrouped.length > 0 && (
+              <>
+                <div className="list-sub">未分组服务 · 各自成为一个用途（{ungrouped.length}）</div>
+                <div className="cards">
+                  {ungrouped.map((svc) => (
+                    <ServiceCard
+                      key={svc.id}
+                      svc={svc}
+                      busy={busy}
+                      onStart={(id) => void doAction(() => api.start(id), '服务已启动')}
+                      onStop={(id) => void doAction(() => api.stop(id), '服务已停止')}
+                      onRestart={(id) => void doAction(() => api.restart(id), '服务已重启')}
+                      onEdit={(id) => setEditor({ id, cfg: config?.services[id] ?? null })}
+                      onDelete={(id) => {
+                        if (!config) return;
+                        if (!window.confirm(`删除服务 ${id}？将停止进程并移除配置。`)) return;
+                        const next = { ...config.services };
+                        delete next[id];
+                        saveConfig({ ...config, services: next });
+                      }}
+                      onToggleAutostart={toggleAutostart}
+                      onOpenLog={(id) => setLogId(id)}
+                      onPromote={(id) => void promote(id)}
+                      onDropTrial={(id) => void dropTrial(id)}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </div>
-        ) : (
-          <div className="cards">
-            {services.map((svc) => (
-              <ServiceCard
-                key={svc.id}
-                svc={svc}
-                busy={busy}
-                onStart={(id) => void doAction(() => api.start(id), '服务已启动')}
-                onStop={(id) => void doAction(() => api.stop(id), '服务已停止')}
-                onRestart={(id) => void doAction(() => api.restart(id), '服务已重启')}
-                onEdit={(id) => {
-                  const cfg = config?.services[id] ?? null;
-                  setEditor({ id, cfg });
-                }}
-                onDelete={(id) => {
-                  if (!config) return;
-                  if (!window.confirm(`删除服务 ${id}？将停止进程并移除配置。`)) return;
-                  const services = { ...config.services };
-                  delete services[id];
-                  saveConfig({ ...config, services });
-                }}
-                onToggleAutostart={toggleAutostart}
-                onOpenLog={(id) => setLogId(id)}
-                onPromote={(id) => void promote(id)}
-                onDropTrial={(id) => void dropTrial(id)}
-              />
-            ))}
-          </div>
-        )}
+
+          <ResourceLedger gpu={gpu} services={services} warnThreshold={warnThreshold} />
+        </div>
       </main>
 
       {editor && config && (

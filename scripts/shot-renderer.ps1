@@ -16,7 +16,8 @@ param(
   [string]$Out,
   [int]$Width = 1440,
   [int]$Height = 900,
-  [int]$Port = 8791
+  [int]$Port = 8791,
+  [switch]$Probe
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
@@ -50,8 +51,10 @@ $srv = Start-Process -FilePath $py -ArgumentList '-m', 'http.server', "$Port", '
 try {
   Start-Sleep -Seconds 2
   $url = "http://127.0.0.1:$Port/_verify.html"
-  $probe = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 5
-  Write-Host "server ready: HTTP $($probe.StatusCode)  $url" -ForegroundColor Cyan
+  # NOTE: do not name this $probe - PowerShell variables are case-insensitive and
+  # it would collide with the [switch]$Probe parameter.
+  $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 5
+  Write-Host "server ready: HTTP $($resp.StatusCode)  $url" -ForegroundColor Cyan
   Remove-Item $Out -Force -ErrorAction SilentlyContinue
   # Chrome writes "N bytes written to file ..." on stderr; with
   # $ErrorActionPreference='Stop' PowerShell turns that into a terminating
@@ -66,8 +69,35 @@ try {
   } else {
     throw "screenshot was not produced"
   }
+
+  if ($Probe) {
+    Write-Host "`n=== structure probe ===" -ForegroundColor Cyan
+    $eap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $domFile = Join-Path $env:TEMP 'dsh-renderer-dom.html'
+    & $chrome --headless=new --disable-gpu --no-sandbox --virtual-time-budget=9000 --dump-dom $url 2>$null |
+      Set-Content -LiteralPath $domFile -Encoding UTF8
+    $dom = Get-Content -LiteralPath $domFile -Raw
+    Remove-Item $domFile -Force -ErrorAction SilentlyContinue
+    $ErrorActionPreference = $eap
+    $m = [regex]::Match($dom, '<pre id="dshverifyout">([\s\S]*?)</pre>')
+    if (-not $m.Success) { throw "probe output not found - the probe script did not run" }
+    $pass = 0; $fail = 0
+    foreach ($line in ($m.Groups[1].Value -split "`n")) {
+      $t = $line.Trim(); if (-not $t) { continue }
+      if ($t -like 'PASS*') { $pass++; Write-Host "  $t" -ForegroundColor Green }
+      elseif ($t -like 'FAIL*') { $fail++; Write-Host "  $t" -ForegroundColor Red }
+      else { Write-Host "  $t" }
+    }
+    if ($fail -eq 0) { Write-Host "verdict: PASS | pass $pass | fail 0" -ForegroundColor Green }
+    else {
+      Write-Host "verdict: FAIL | pass $pass | fail $fail" -ForegroundColor Red
+      $probeFailed = $true
+    }
+  }
 } finally {
   Stop-Process -Id $srv.Id -Force -ErrorAction SilentlyContinue
   Remove-Item $verify -Force -ErrorAction SilentlyContinue
   Write-Host "server stopped (pid $($srv.Id)); temp verify page removed" -ForegroundColor DarkGray
 }
+if ($probeFailed) { exit 1 }
