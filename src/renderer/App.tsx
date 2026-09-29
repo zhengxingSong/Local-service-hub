@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Settings, LogOut, Plus, Download, RefreshCw } from 'lucide-react';
+import { Settings, LogOut, SlidersHorizontal, ArrowLeft, RefreshCw } from 'lucide-react';
 import { AppConfig, DownloadResult, GpuInfo, ModelEntry, ServiceConfig, ServiceView } from './types';
-import { ServiceCard, basename, formatSize } from './components/ServiceCard';
+import { ServiceCard, basename } from './components/ServiceCard';
 import { PurposeCard } from './components/PurposeCard';
 import { ResourceLedger } from './components/ResourceLedger';
+import { ConfigView } from './components/ConfigView';
 import { PresetManager } from './components/PresetManager';
 import { ServiceEditor } from './components/ServiceEditor';
 import { SettingsPanel } from './components/SettingsPanel';
@@ -14,7 +15,6 @@ type EditorState = { id: string | null; cfg: ServiceConfig | null } | null;
 
 /** 状态轮询间隔：状态变更还会由主进程主动推送，这里只做兜底与显存刷新 */
 const POLL_INTERVAL_MS = 5000;
-const MODEL_PAGE_SIZE = 20;
 
 export function App() {
   const api = window.serviceHubApi;
@@ -30,7 +30,8 @@ export function App() {
   const [showDownload, setShowDownload] = useState(false);
   const [logId, setLogId] = useState<string | null>(null);
   const [configNotice, setConfigNotice] = useState(false);
-  const [modelVisible, setModelVisible] = useState(MODEL_PAGE_SIZE);
+  /** 运行态是默认房间；配置态是显式进出的房间 */
+  const [view, setView] = useState<'run' | 'config'>('run');
   const bannerTimer = useRef<number | null>(null);
 
   const showBanner = useCallback((kind: 'ok' | 'error', text: string) => {
@@ -173,6 +174,38 @@ export function App() {
     });
   };
 
+  /** 复制服务：同类配置复用（改模型与端口即可），新 id 加后缀并避开已占用 */
+  const copyService = (id: string) => {
+    if (!config) return;
+    const src = config.services[id];
+    if (!src) return;
+    let n = 2;
+    while (config.services[`${id}-${n}`]) n += 1;
+    const nextId = `${id}-${n}`;
+    const port = src.port ? src.port + n - 1 : src.port;
+    saveConfig({
+      ...config,
+      services: {
+        ...config.services,
+        [nextId]: { ...src, label: `${src.label} (副本)`, port, autostart: false },
+      },
+    });
+    showBanner('ok', `已复制为 ${nextId}（端口 ${port}）— 记得改成不同的模型或端口`);
+  };
+
+  const deleteService = (id: string) => {
+    if (!config) return;
+    if (!window.confirm(`删除服务 ${id}？将停止进程并移除配置。\n\n它不会删除模型文件；如果它属于某个预设组，也会从组里摘掉。`)) return;
+    const next = { ...config.services };
+    delete next[id];
+    // 从所有预设组里摘掉，避免留下悬空成员
+    const presets: Record<string, string[]> = {};
+    for (const [name, ids] of Object.entries(config.presets ?? {})) {
+      presets[name] = ids.filter((x) => x !== id);
+    }
+    saveConfig({ ...config, services: next, presets });
+  };
+
   const startTrial = async (m: ModelEntry) => {
     await doAction(() => api.startTrial(m.path, m.siblingMmproj ?? undefined), `已临时启动 ${basename(m.path)}`);
   };
@@ -222,10 +255,6 @@ export function App() {
 
   const warnThreshold = config?.vramWarnThreshold ?? 90;
 
-  // 未配置成服务的模型（模型库一键体验）
-  const configuredModels = new Set(Object.values(config?.services ?? {}).map((s) => s.model).filter(Boolean));
-  const freeModels = models.filter((m) => !configuredModels.has(m.path));
-
   // 用途卡分组：一个预设组 = 一个用途；未分组服务各自成为一个单成员用途
   const byId: Record<string, ServiceView> = Object.fromEntries(services.map((s) => [s.id, s]));
   const presetEntries = Object.entries(config?.presets ?? {});
@@ -254,7 +283,16 @@ export function App() {
           <div className="header-sub">本机服务 · 进程 · 容器</div>
         </div>
         <div className="header-spacer" />
-        <button className="btn" onClick={() => setShowSettings(true)}><Settings size={15} /> 设置</button>
+        {view === 'run' ? (
+          <button className="btn" onClick={() => setView('config')}>
+            <SlidersHorizontal size={15} /> 配置
+          </button>
+        ) : (
+          <button className="btn" onClick={() => setView('run')}>
+            <ArrowLeft size={15} /> 返回运行态
+          </button>
+        )}
+        <button className="btn ghost" onClick={() => setShowSettings(true)}><Settings size={15} /> 设置</button>
         <button className="btn ghost" onClick={() => void api.quit()}><LogOut size={15} /> 退出</button>
       </header>
 
@@ -269,32 +307,25 @@ export function App() {
           </div>
         )}
 
-        {showModelPanel && (
-          <div className="model-lib">
-            <div className="model-lib-head">
-              <span>llama 模型库 · 一键体验（未配置 {freeModels.length}）</span>
-              <div className="model-lib-actions">
-                <button className="btn small ghost" onClick={() => void refreshModels(true)}><RefreshCw size={13} /> 刷新</button>
-                <button className="btn small ghost" onClick={() => setShowDownload(true)}><Download size={13} /> 下载模型</button>
-              </div>
-            </div>
-            <div className="model-lib-grid">
-              {freeModels.slice(0, modelVisible).map((m) => (
-                <div key={m.path} className="model-chip" title={m.path}>
-                  <span className="model-chip-name">{basename(m.name)}</span>
-                  <span className="model-chip-size">{formatSize(m.sizeBytes)}</span>
-                  <button className="btn small" disabled={busy} onClick={() => void startTrial(m)}>一键体验</button>
-                </div>
-              ))}
-            </div>
-            {freeModels.length > modelVisible && (
-              <button className="btn small ghost model-more" onClick={() => setModelVisible((n) => n + MODEL_PAGE_SIZE)}>
-                显示更多（还有 {freeModels.length - modelVisible} 个）
-              </button>
-            )}
-          </div>
-        )}
-
+        {view === 'config' && config ? (
+          <ConfigView
+            config={config}
+            services={services}
+            models={models}
+            busy={busy}
+            showModelPanel={showModelPanel}
+            onNewService={() => setEditor({ id: null, cfg: null })}
+            onEditService={(id) => setEditor({ id, cfg: config.services[id] ?? null })}
+            onCopyService={copyService}
+            onDeleteService={deleteService}
+            onOpenLog={(id) => setLogId(id)}
+            onOpenGroupEditor={() => setShowPresets(true)}
+            onDissolveGroup={dissolvePreset}
+            onRefreshModels={(force) => void refreshModels(force)}
+            onOpenDownload={() => setShowDownload(true)}
+            onTrialModel={(m) => void startTrial(m)}
+          />
+        ) : (
         <div className="run-grid">
           <div className="run-main">
             <div className="list-head">
@@ -304,9 +335,6 @@ export function App() {
                 {showModelPanel && ` · ${models.length} 个可加载模型`}
               </span>
               <span className="list-spacer" />
-              <button className="btn small ghost" onClick={() => setEditor({ id: null, cfg: null })}>
-                <Plus size={14} /> 新增服务
-              </button>
             </div>
 
             {services.length === 0 && (
@@ -371,6 +399,7 @@ export function App() {
 
           <ResourceLedger gpu={gpu} services={services} warnThreshold={warnThreshold} />
         </div>
+        )}
       </main>
 
       {editor && config && (

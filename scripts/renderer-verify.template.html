@@ -67,12 +67,12 @@
           modelsRoot: 'D:\\LLM Model\\llama.cpp\\models',
           maxRestarts: 5, autostartOnLogin: true, vramWarnThreshold: 90,
           services: {
-            vlm: { label: 'VLM · Qwen2.5-VL-7B', role: 'vlm', model: '', mmproj: '', alias: 'qwen2.5-vl-7b', port: 11435, args: [], autostart: false, enabled: true },
-            embedding: { label: 'Embedding · bge-m3', role: 'embedding', model: '', mmproj: '', alias: 'bge-m3', port: 11436, args: [], autostart: false, enabled: true },
-            intent: { label: 'Intent · ov_intent_analysis_sft', role: 'intent', model: '', mmproj: '', alias: 'ov_intent_analysis_sft', port: 11437, args: [], autostart: false, enabled: true },
+            vlm: { label: 'VLM · Qwen2.5-VL-7B', role: 'vlm', model: 'D:\\LLM Model\\llama.cpp\\models\\Qwen2.5-VL-7B\\qwen2.5-vl-7b-instruct-Q4_K_M.gguf', mmproj: 'D:\\LLM Model\\llama.cpp\\models\\Qwen2.5-VL-7B\\mmproj-f16.gguf', alias: 'qwen2.5-vl-7b', port: 11435, args: [], autostart: false, enabled: true },
+            embedding: { label: 'Embedding · bge-m3', role: 'embedding', model: 'D:\\LLM Model\\llama.cpp\\models\\bge-m3\\bge-m3-Q8_0.gguf', mmproj: '', alias: 'bge-m3', port: 11436, args: [], autostart: false, enabled: true },
+            intent: { label: 'Intent · ov_intent_analysis_sft', role: 'intent', model: 'D:\\LLM Model\\llama.cpp\\models\\ov_intent_analysis_sft\\ov_intent_analysis_sft-Q8_0.gguf', mmproj: '', alias: 'ov_intent_analysis_sft', port: 11437, args: [], autostart: false, enabled: true },
             'ov-server': { label: 'OpenViking 服务', role: 'ov', model: '', mmproj: '', alias: '', port: 1933, args: [], autostart: false, enabled: true, kind: 'command', command: 'python.exe', cwd: 'D:\\deepseek\\ov-data' },
-            'chat-27b': { label: 'Chat · Qwen3.8-27B', role: 'chat', model: '', mmproj: '', alias: 'qwen3.8-27b', port: 8080, args: [], autostart: false, enabled: true },
-            reranker: { label: 'Rerank · Qwen3-Reranker-0.6B', role: 'rerank', model: '', mmproj: '', alias: 'qwen3-reranker-0.6b', port: 11438, args: [], autostart: false, enabled: true },
+            'chat-27b': { label: 'Chat · Qwen3.8-27B', role: 'chat', model: 'D:\\LLM Model\\llama.cpp\\models\\Qwen3.8-27B\\Qwen3.8-27B-UD-Q4_K_XL.gguf', mmproj: '', alias: 'qwen3.8-27b', port: 8080, args: [], autostart: false, enabled: true },
+            reranker: { label: 'Rerank · Qwen3-Reranker-0.6B', role: 'rerank', model: 'D:\\\\LLM Model\\\\llama.cpp\\\\models\\\\Qwen3-Reranker-0.6B\\\\Qwen3-Reranker-0.6B-Q4_K_M.gguf', mmproj: '', alias: 'qwen3-reranker-0.6b', port: 11438, args: [], autostart: false, enabled: true },
             weknora: { label: 'WeKnora 知识库', role: 'weknora', model: '', mmproj: '', alias: '', port: 18080, args: [], autostart: false, enabled: true, kind: 'compose', composeDir: 'E:\\weknora' },
             laya: { label: 'Laya · System 1 决策', role: 'decision', model: '', mmproj: '', alias: 'laya', port: 11439, args: [], autostart: false, enabled: false, kind: 'command', command: 'python.exe', cwd: 'D:\\LLM Model\\Laya' }
           },
@@ -129,26 +129,34 @@
     -->
     <script>
       window.addEventListener('load', function () {
-        setTimeout(function () {
-          var out = [];
-          function q(s) { return document.querySelector(s); }
-          function qa(s) { return Array.prototype.slice.call(document.querySelectorAll(s)); }
-          function txt(s) { var e = q(s); return e ? e.innerText.replace(/\s+/g, ' ') : ''; }
-          function mark(n, ok, extra) { out.push((ok ? 'PASS' : 'FAIL') + ' | ' + n + (extra ? ' | ' + extra : '')); }
+        var out = [];
+        function q(s) { return document.querySelector(s); }
+        function qa(s) { return Array.prototype.slice.call(document.querySelectorAll(s)); }
+        function txt(s) { var e = q(s); return e ? e.innerText.replace(/\s+/g, ' ') : ''; }
+        function mark(n, ok, extra) { out.push((ok ? 'PASS' : 'FAIL') + ' | ' + n + (extra ? ' | ' + extra : '')); }
+        function byText(t) {
+          var c = qa('button,[role=button],a').filter(function (e) { return e.textContent.trim() === t; });
+          return c[0] || null;
+        }
+        function finish() {
+          var pre = document.createElement('pre');
+          pre.id = 'dshverifyout';
+          pre.textContent = out.join('\n');
+          document.body.appendChild(pre);
+        }
 
+        /* 阶段一：运行态（用途卡 + 资源账本） */
+        function phase1() {
           var purposes = qa('.purpose');
-          mark('渲染·用途卡（2 个预设组）', purposes.length === 2, purposes.length + ' 张');
-          mark('渲染·未分组服务的单成员卡（3 个）', qa('.cards .card').length === 3, qa('.cards .card').length + ' 张');
-          mark('渲染·用途卡可展开', qa('.purpose-toggle').length === purposes.length);
-          mark('渲染·成员行存在', qa('.member').length >= 1, qa('.member').length + ' 行（默认展开的单成员用途）');
-
-          mark('账本·存在', !!q('.ledger') && txt('.ledger-head').indexOf('资源') >= 0);
-          mark('账本·显存读数', /GB/.test(txt('.ledger-sub')), txt('.ledger-sub').slice(0, 48));
-          mark('账本·占用者与其它进程', qa('.ledger-item').length >= 5, qa('.ledger-item').length + ' 行');
-          mark('账本·可启动与差容量兼有', qa('.ledger-fit.ok').length >= 1 && qa('.ledger-fit.bad').length >= 1,
+          mark('运行态·用途卡（2 个预设组）', purposes.length === 2, purposes.length + ' 张');
+          mark('运行态·未分组单成员卡（3 个）', qa('.cards .card').length === 3, qa('.cards .card').length + ' 张');
+          mark('运行态·用途卡可展开', qa('.purpose-toggle').length === purposes.length);
+          mark('运行态·成员行存在', qa('.member').length >= 1, qa('.member').length + ' 行');
+          mark('运行态·账本存在', !!q('.ledger') && txt('.ledger-head').indexOf('资源') >= 0);
+          mark('运行态·账本显存读数', /GB/.test(txt('.ledger-sub')), txt('.ledger-sub').slice(0, 48));
+          mark('运行态·账本行列', qa('.ledger-item').length >= 5, qa('.ledger-item').length + ' 行');
+          mark('运行态·可启动与差容量', qa('.ledger-fit.ok').length >= 1 && qa('.ledger-fit.bad').length >= 1,
             '可启动 ' + qa('.ledger-fit.ok').length + ' · 差容量 ' + qa('.ledger-fit.bad').length);
-          mark('账本·占用来源标注', qa('.ledger-src').length >= 1, qa('.ledger-src').length + ' 处');
-
           mark('Carbon·0px 圆角', qa('.purpose, .ledger, .btn').every(function (e) {
             return getComputedStyle(e).borderTopLeftRadius === '0px';
           }));
@@ -159,11 +167,41 @@
           mark('Carbon·正文 0.16px 字距', getComputedStyle(document.body).letterSpacing === '0.16px',
             getComputedStyle(document.body).letterSpacing);
 
-          var pre = document.createElement('pre');
-          pre.id = 'dshverifyout';
-          pre.textContent = out.join('\n');
-          document.body.appendChild(pre);
-        }, 400);
+          var cfgBtn = byText('配置');
+          if (!cfgBtn) { out.push('MISS | 找不到「配置」入口'); finish(); return; }
+          cfgBtn.click();
+          setTimeout(phase2, 300);
+        }
+
+        /* 阶段二：配置态（服务清单 / 预设组 / 素材 三页签） */
+        function phase2() {
+          var tabs = qa('.cfg-tab');
+          mark('配置态·三个页签', tabs.length === 3, tabs.length + ' 个');
+          mark('配置态·服务清单表格（8 行）', qa('.cfg-table tbody tr').length === 8, qa('.cfg-table tbody tr').length + ' 行');
+          mark('配置态·行内动作完整', qa('.cfg-rowacts').length === 8, qa('.cfg-rowacts').length + ' 组');
+          mark('配置态·归属组标记', qa('.cfg-group').length >= 5, qa('.cfg-group').length + ' 处');
+          mark('配置态·未分组标注', txt('.cfg-pane').indexOf('未分组') >= 0);
+
+          if (tabs[1]) tabs[1].click();
+          setTimeout(function () {
+            mark('配置态·预设组组卡', qa('.group-card').length >= 2, qa('.group-card').length + ' 张');
+            mark('配置态·组内成员有序', qa('.group-card .member-ord').length >= 4, qa('.group-card .member-ord').length + ' 行');
+            if (tabs[2]) tabs[2].click();
+            setTimeout(function () {
+              mark('配置态·素材表（9 行）', qa('.cfg-table tbody tr').length === 9, qa('.cfg-table tbody tr').length + ' 行');
+              mark('配置态·引用状态两种都有', txt('.cfg-pane').indexOf('未被任何服务引用') >= 0 && qa('.cfg-group').length >= 5,
+                '被引用标记 ' + qa('.cfg-group').length + ' 处');
+              mark('配置态·未被引用标注', txt('.cfg-pane').indexOf('未被任何服务引用') >= 0);
+              mark('配置态·同名重复标注', txt('.cfg-pane').indexOf('同名重复') >= 0);
+              mark('Carbon·配置态 0px 圆角', qa('.cfg-table, .group-card').every(function (e) {
+                return getComputedStyle(e).borderTopLeftRadius === '0px';
+              }));
+              finish();
+            }, 250);
+          }, 250);
+        }
+
+        setTimeout(phase1, 400);
       });
     </script>
   </head>

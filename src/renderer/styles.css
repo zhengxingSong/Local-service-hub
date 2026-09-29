@@ -679,6 +679,56 @@ hr.sep { border: none; border-top: 1px solid var(--color-hairline); margin: var(
 .ledger-note svg { flex: none; margin-top: 2px; }
 .ledger-empty { padding: var(--space-md); font-size: var(--type-sm-size); color: var(--color-ink-muted); line-height: 1.5; }
 
+/* ---------- 配置态：服务清单 / 预设组 / 素材 ---------- */
+.cfg { display: flex; flex-direction: column; gap: 0; flex: 1; min-height: 0; }
+.cfg-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--color-hairline); }
+.cfg-tab {
+  border: none; background: transparent; color: var(--color-ink-muted);
+  font-family: var(--type-body-font); font-size: var(--type-body-size);
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+.cfg-tab:hover { background: var(--color-row-hover); color: var(--color-ink); }
+.cfg-tab.on { color: var(--color-ink); border-bottom-color: var(--color-primary); }
+.cfg-pane { display: flex; flex-direction: column; gap: var(--space-sm); padding-top: var(--space-sm); }
+.cfg-tool { display: flex; align-items: center; gap: var(--space-xs); flex-wrap: wrap; }
+.cfg-note { font-size: var(--type-sm-size); color: var(--color-ink-muted); }
+
+.cfg-table { width: 100%; border-collapse: collapse; font-size: var(--type-sm-size); }
+.cfg-table th {
+  text-align: left; font-weight: var(--type-emphasis-weight); color: var(--color-ink);
+  padding: var(--space-xs) var(--space-xs);
+  border-bottom: 1px solid var(--color-hairline);
+}
+.cfg-table td {
+  padding: var(--space-xs) var(--space-xs);
+  border-bottom: 1px solid var(--color-hairline);
+  vertical-align: middle;
+  color: var(--color-ink);
+}
+.cfg-table tbody tr:hover td { background: var(--color-surface-1); }
+.cfg-name { margin-left: var(--space-xs); font-weight: var(--type-emphasis-weight); }
+.cfg-id { margin-left: var(--space-xs); font-family: var(--type-mono-font); color: var(--color-ink-muted); }
+.cfg-mono { font-family: var(--type-mono-font); font-variant-numeric: tabular-nums; }
+.cfg-alias { margin-left: var(--space-xs); font-family: var(--type-mono-font); color: var(--color-ink-muted); }
+.cfg-path { font-family: var(--type-mono-font); word-break: break-all; }
+.cfg-none { color: var(--color-ink-muted); }
+.cfg-group {
+  display: inline-block; margin-right: var(--space-xxs);
+  padding: 0 6px; border: 1px solid var(--color-hairline); color: var(--color-ink);
+}
+.cfg-flag { display: inline-block; margin-right: var(--space-xxs); padding: 0 6px; border: 1px solid var(--color-hairline); color: var(--color-ink-muted); }
+.cfg-flag.ok { border-color: var(--color-success); color: var(--color-success); }
+.cfg-rowacts { display: inline-flex; gap: var(--space-xxs); }
+.cfg-warn { color: var(--color-warning-text); font-weight: var(--type-emphasis-weight); }
+.cfg-ok { color: var(--color-success); }
+
+.group-card { border: 1px solid var(--color-hairline); background: var(--color-canvas); }
+.group-head { display: flex; align-items: center; gap: var(--space-xs); padding: var(--space-sm) var(--space-md); }
+.group-name { font-size: var(--type-body-size); font-weight: var(--type-emphasis-weight); }
+.group-count { font-size: var(--type-sm-size); color: var(--color-ink-muted); }
+
 /* ---------- 退化：窄窗口 ---------- */
 @media (max-width: 1180px) {
   .run-grid { grid-template-columns: 1fr; }
