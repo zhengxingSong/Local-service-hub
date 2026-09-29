@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>服务中枢 · 渲染验证</title>
+    <!--
+      真实渲染层的验证载体（模板）。
+      shot-renderer.ps1 会把 __JS__ / __CSS__ 换成当前构建的哈希资产名，
+      写进 dist/renderer/_verify.html，再用本机 HTTP 起静态服务截图。
+
+      为什么必须走 HTTP：Chrome 在 file:// 下会因 CORS 拒绝加载 <script type="module">，
+      页面会是纯白；Electron 允许 file://，浏览器不允许。
+
+      桩必须排在 module 之前：经典脚本先执行，module 是 defer 的。
+      桩里的数据取自本机真实配置（8 个服务 / 2 个预设组 / GPU 9623 of 24576 MiB）。
+    -->
+    <script>
+      window.serviceHubApi = (function () {
+        var mk = function (o) {
+          return Object.assign({
+            state: 'stopped', pid: null, returncode: null, restartCount: 0,
+            lastError: null, startedAt: null, endedAt: null, listening: false,
+            label: '', role: '', model: '', mmproj: '', alias: '', port: 0, args: [],
+            kind: 'llama', healthCheckType: 'none', autostart: false, enabled: true,
+            isCommand: false, command: '', cwd: '', env: {}, isCompose: false,
+            composeDir: '', composeProfiles: [], composeFile: '',
+            vramEstimateMB: null, vramActualMB: null, healthy: false
+          }, o);
+        };
+        var services = [
+          mk({ id: 'vlm', label: 'VLM · Qwen2.5-VL-7B', role: 'vlm', state: 'running', pid: 23500,
+               startedAt: '2026-09-29T06:54:02', listening: true, port: 11435, alias: 'qwen2.5-vl-7b',
+               model: 'D:\\LLM Model\\llama.cpp\\models\\Qwen2.5-VL-7B\\qwen2.5-vl-7b-instruct-Q4_K_M.gguf',
+               healthCheckType: 'openai-models', vramEstimateMB: 6448, healthy: true }),
+          mk({ id: 'embedding', label: 'Embedding · bge-m3', role: 'embedding', state: 'running', pid: 8740,
+               startedAt: '2026-09-29T06:54:03', listening: true, port: 11436, alias: 'bge-m3',
+               model: 'D:\\LLM Model\\llama.cpp\\models\\bge-m3\\bge-m3-Q8_0.gguf',
+               healthCheckType: 'openai-models', vramEstimateMB: 678, healthy: true }),
+          mk({ id: 'intent', label: 'Intent · ov_intent_analysis_sft', role: 'intent', state: 'loading', pid: 21736,
+               startedAt: '2026-09-29T06:54:04', listening: true, port: 11437, alias: 'ov_intent_analysis_sft',
+               model: 'D:\\LLM Model\\llama.cpp\\models\\ov_intent_analysis_sft\\ov_intent_analysis_sft-Q8_0.gguf',
+               healthCheckType: 'openai-models', vramEstimateMB: 867, healthy: false }),
+          mk({ id: 'ov-server', label: 'OpenViking 服务', role: 'ov', state: 'running', pid: 7852,
+               startedAt: '2026-09-29T06:54:06', listening: true, port: 1933, kind: 'command',
+               isCommand: true, command: 'D:\\Python\\Python312\\python.exe', cwd: 'D:\\deepseek\\ov-data',
+               args: ['run-server.py', '--config', 'ov.conf'], env: { PYTHONUNBUFFERED: '1' },
+               healthCheckType: 'http', vramEstimateMB: 320, healthy: true }),
+          mk({ id: 'chat-27b', label: 'Chat · Qwen3.8-27B', role: 'chat', port: 8080, alias: 'qwen3.8-27b',
+               model: 'D:\\LLM Model\\llama.cpp\\models\\Qwen3.8-27B\\Qwen3.8-27B-UD-Q4_K_XL.gguf',
+               healthCheckType: 'openai-models', vramEstimateMB: 19144 }),
+          mk({ id: 'reranker', label: 'Rerank · Qwen3-Reranker-0.6B', role: 'rerank', port: 11438,
+               alias: 'qwen3-reranker-0.6b',
+               model: 'D:\\\\LLM Model\\\\llama.cpp\\\\models\\\\Qwen3-Reranker-0.6B\\\\Qwen3-Reranker-0.6B-Q4_K_M.gguf',
+               healthCheckType: 'openai-models', vramEstimateMB: 423,
+               lastError: '模型路径含重复分隔符：Windows 能解析，但属于手改配置留下的痕迹' }),
+          mk({ id: 'weknora', label: 'WeKnora 知识库', role: 'weknora', port: 18080, kind: 'compose',
+               isCompose: true, composeDir: 'E:\\weknora', healthCheckType: 'http' }),
+          mk({ id: 'laya', label: 'Laya · System 1 决策', role: 'decision', port: 11439, alias: 'laya',
+               kind: 'command', isCommand: true, command: 'D:\\LLM Model\\Laya\\.venv\\Scripts\\python.exe',
+               cwd: 'D:\\LLM Model\\Laya', healthCheckType: 'tcp', enabled: false })
+        ];
+        var gpu = { usedMB: 9623, totalMB: 24576 };
+        var config = {
+          llamaServerPath: 'D:\\LLM Model\\llama.cpp\\runtime\\llama-server.exe',
+          scanRoots: ['D:\\LLM Model'],
+          modelsRoot: 'D:\\LLM Model\\llama.cpp\\models',
+          maxRestarts: 5, autostartOnLogin: true, vramWarnThreshold: 90,
+          services: {
+            vlm: { label: 'VLM · Qwen2.5-VL-7B', role: 'vlm', model: '', mmproj: '', alias: 'qwen2.5-vl-7b', port: 11435, args: [], autostart: false, enabled: true },
+            embedding: { label: 'Embedding · bge-m3', role: 'embedding', model: '', mmproj: '', alias: 'bge-m3', port: 11436, args: [], autostart: false, enabled: true },
+            intent: { label: 'Intent · ov_intent_analysis_sft', role: 'intent', model: '', mmproj: '', alias: 'ov_intent_analysis_sft', port: 11437, args: [], autostart: false, enabled: true },
+            'ov-server': { label: 'OpenViking 服务', role: 'ov', model: '', mmproj: '', alias: '', port: 1933, args: [], autostart: false, enabled: true, kind: 'command', command: 'python.exe', cwd: 'D:\\deepseek\\ov-data' },
+            'chat-27b': { label: 'Chat · Qwen3.8-27B', role: 'chat', model: '', mmproj: '', alias: 'qwen3.8-27b', port: 8080, args: [], autostart: false, enabled: true },
+            reranker: { label: 'Rerank · Qwen3-Reranker-0.6B', role: 'rerank', model: '', mmproj: '', alias: 'qwen3-reranker-0.6b', port: 11438, args: [], autostart: false, enabled: true },
+            weknora: { label: 'WeKnora 知识库', role: 'weknora', model: '', mmproj: '', alias: '', port: 18080, args: [], autostart: false, enabled: true, kind: 'compose', composeDir: 'E:\\weknora' },
+            laya: { label: 'Laya · System 1 决策', role: 'decision', model: '', mmproj: '', alias: 'laya', port: 11439, args: [], autostart: false, enabled: false, kind: 'command', command: 'python.exe', cwd: 'D:\\LLM Model\\Laya' }
+          },
+          presets: { 'OpenViking 组': ['vlm', 'embedding', 'intent', 'ov-server'], '聊天组': ['chat-27b'] },
+          exclusivePresets: [],
+          showModelPanel: true
+        };
+        var models = [
+          { path: 'D:\\LLM Model\\llama.cpp\\models\\Qwen3.8-27B\\Qwen3.8-27B-UD-Q4_K_XL.gguf', name: 'Qwen3.8-27B-UD-Q4_K_XL.gguf', sizeBytes: 17930000000, siblingMmproj: null },
+          { path: 'D:\\LLM Model\\llama.cpp\\models\\Qwen2.5-VL-7B\\qwen2.5-vl-7b-instruct-Q4_K_M.gguf', name: 'qwen2.5-vl-7b-instruct-Q4_K_M.gguf', sizeBytes: 4682000000, siblingMmproj: 'D:\\LLM Model\\llama.cpp\\models\\Qwen2.5-VL-7B\\mmproj-f16.gguf' },
+          { path: 'D:\\LLM Model\\llama.cpp\\models\\Qwen2.5-VL-7B\\mmproj-f16.gguf', name: 'mmproj-f16.gguf', sizeBytes: 1353000000, siblingMmproj: null },
+          { path: 'D:\\LLM Model\\llama.cpp\\models\\ov_intent_analysis_sft\\ov_intent_analysis_sft-Q8_0.gguf', name: 'ov_intent_analysis_sft-Q8_0.gguf', sizeBytes: 816000000, siblingMmproj: null },
+          { path: 'D:\\LLM Model\\llama.cpp\\models\\bge-m3\\bge-m3-Q8_0.gguf', name: 'bge-m3-Q8_0.gguf', sizeBytes: 634000000, siblingMmproj: null },
+          { path: 'D:\\LLM Model\\llama.cpp\\models\\Qwen3-Reranker-0.6B\\Qwen3-Reranker-0.6B-Q4_K_M.gguf', name: 'Qwen3-Reranker-0.6B-Q4_K_M.gguf', sizeBytes: 397000000, siblingMmproj: null },
+          { path: 'D:\\LLM Model\\llama.cpp\\models\\SenseNova-U1.5-8B-MoT-Preview-Q8.gguf', name: 'SenseNova-U1.5-8B-MoT-Preview-Q8.gguf', sizeBytes: 19950000000, siblingMmproj: null },
+          { path: 'D:\\LLM Model\\llama.cpp\\models\\qwen2.5-vl-7b-instruct-f16.gguf', name: 'qwen2.5-vl-7b-instruct-f16.gguf', sizeBytes: 15240000000, siblingMmproj: null },
+          { path: 'D:\\LLM Model\\llama.cpp\\models\\mmproj-F16.gguf', name: 'mmproj-F16.gguf', sizeBytes: 923000000, siblingMmproj: null }
+        ];
+        var log = '17.27.560.754 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 744473368\n'
+          + '17.27.610.775 I slot launch_slot_: id  0 | task 327 | processing task, is_child = 0\n'
+          + '17.28.430.785 I slot print_timing: id  0 | task 327 | prompt eval time =     341.22 ms /  2521 tokens\n'
+          + '17.28.430.793 I slot print_timing: id  0 | task 327 |       total time =     819.97 ms /  2668 tokens\n'
+          + '17.28.431.107 I slot      release: id  0 | task 327 | stop processing: n_tokens = 2667, truncated = 0';
+        return {
+          getConfig: function () { return Promise.resolve(config); },
+          saveConfig: function (c) { return Promise.resolve(c); },
+          status: function () { return Promise.resolve({ services: services, gpu: gpu }); },
+          start: function (id) { return Promise.resolve(services.filter(function (s) { return s.id === id; })[0]); },
+          stop: function (id) { return Promise.resolve(services.filter(function (s) { return s.id === id; })[0] || null); },
+          restart: function (id) { return Promise.resolve(services.filter(function (s) { return s.id === id; })[0]); },
+          getLog: function () { return Promise.resolve(log); },
+          clearLog: function () { return Promise.resolve(true); },
+          scanModels: function () { return Promise.resolve(models); },
+          startTrial: function () { return Promise.resolve(services[0]); },
+          promote: function () { return Promise.resolve(config); },
+          dropTrial: function () { return Promise.resolve(true); },
+          reloadConfig: function () { return Promise.resolve({ restarted: [] }); },
+          downloadModel: function () { return Promise.resolve({ ok: true, path: 'x.gguf', sha256Verified: true }); },
+          cancelDownload: function () { return Promise.resolve(true); },
+          openLogDir: function () { return Promise.resolve(true); },
+          quit: function () { return Promise.resolve(); },
+          onServicesChanged: function () { return function () {}; },
+          onConfigChanged: function () { return function () {}; },
+          onDownloadProgress: function () { return function () {}; }
+        };
+      })();
+    </script>
+    <script type="module" crossorigin src="./assets/__JS__"></script>
+    <link rel="stylesheet" crossorigin href="./assets/__CSS__">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

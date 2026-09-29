@@ -108,6 +108,38 @@ cd docs\design\preview
 
 三份参照点名的字体**本机都不存在**：`Linear Display/Text`、`IBM Plex *`、`Inter`、`SF Pro`、`Geist` 全部未安装，`Segoe UI Variable` 也没有（本机是 Win10）。三版统一落到 `"Segoe UI"` + `"Noto Sans SC"`（本机有 Thin/Light/DemiLight/Medium/Black 全字重）+ `"Cascadia Mono"`，并**保留各自的性格**：Linear 的负字距、Carbon 的 weight 300 展示字（用 `Segoe UI Light` 复现）、ClickHouse 的 700 重字与强负字距。
 
+## 已落地到真实产品（Carbon）
+
+用户选定 **L2 Carbon** 后，视觉语言已回写到真实应用，改的是**唯一一个文件**：
+
+```
+src/renderer/styles.css    450 行 → Carbon 令牌与组件规则
+```
+
+选择只改样式的原因：TSX 里**没有任何 `var(--*)` 或内联色值**（已机械核对），样式与结构是干净分离的，所以不需要动一行组件代码，风险面最小。
+
+**落地时遵守的 Carbon 硬规则**（机械自检输出）：
+
+| 规则 | 自检结果 |
+|---|---|
+| 每个 CTA / 卡片 / 输入 / 容器 0px 圆角 | `border-radius` **只有 `var(--rounded-none)` 一种取值**（25 处） |
+| 不用投影做层级 | `box-shadow` **只有 `.modal` 一处**（文档化的浮层例外） |
+| 无渐变、无玻璃、无全大写标签 | `gradient` 0 · `backdrop-filter` 0 · `text-transform:uppercase` 0 |
+| 展示字 weight 300、正文 400、强调 600 | 字重只有 300 / 400 / 600 三档（无 700） |
+| IBM Blue 稀缺 | 蓝色只出现在主 CTA、选中页签、进度条；**0 处卡片底、0 处眉标** |
+| 正文 `letter-spacing: 0.16px` | 已写入 body 与 `.btn`；展示字字距为 0（参照如此） |
+| 层级靠面变化 + 1px 发丝线 | canvas `#ffffff` → surface-1 `#f4f4f4` → surface-2 `#e0e0e0` + `#e0e0e0` 发丝线 |
+| 旧主题彻底清除 | 旧 indigo `#6366f1` / violet `#8b5cf6` / 暗底 `#0b1020` / 卡片底 `#141c33` **全部 0.000%** |
+
+**落地验证**（真实代码门槛，全部退出码 0）：
+`pnpm run build:renderer` → 构建通过（CSS 17.34 kB / gzip 3.38 kB）· `pnpm run typecheck` → 无错 · `pnpm test` → **88/88 通过（7 个文件）**
+
+**真实渲染验证**（像素实测，不是"应该没问题"）：用 [shot-renderer.ps1](../../../scripts/shot-renderer.ps1) 给内置 API 打桩后渲染构建产物，测得
+canvas `#ffffff` **83.0%** · surface-1 `#f4f4f4` **10.2%** · surface-2 `#e0e0e0` 1.95% · ink `#161616` 0.22% · **primary `#0f62fe` 0.92%**（存在但稀缺）· 旧主题四色全部 0.000%。
+截图见 [shots/7-real-app-carbon.png](shots/7-real-app-carbon.png)。
+
+> **一个必须知道的坑**：Chrome 在 `file://` 下会因 CORS 拒绝加载 `<script type="module">`，页面会是**纯白**（我第一次截图只有 6 KB、100% 白）。Electron 允许 `file://`，浏览器不允许——验证真实渲染必须走本机 HTTP。工具已封装：[scripts/shot-renderer.ps1](../../../scripts/shot-renderer.ps1) + [scripts/renderer-verify.template.html](../../../scripts/renderer-verify.template.html)。
+
 ## 复验中发现并修掉的真缺陷
 
 | # | 缺陷 | 影响 | 来源 |
