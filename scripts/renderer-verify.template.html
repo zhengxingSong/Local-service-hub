@@ -232,12 +232,54 @@
                     mark('Carbon·设置 0px 圆角', qa('.modal .sec-h, .modal .cfg-table').every(function (e) {
                       return getComputedStyle(e).borderTopLeftRadius === '0px';
                     }));
-                    finish();
+                    phase5();
                   }, 300);
                 }, 300);
               }, 250);
             }, 250);
           }, 250);
+        }
+
+        /* 阶段五：预检决策面（从运行态点「聊天组」启用，资源不足应被挡住） */
+        function phase5() {
+          var closeBtn = byText('关闭');
+          if (closeBtn) closeBtn.click();
+          setTimeout(function () {
+            var backBtn = q('.edit-h .btn');
+            if (backBtn) backBtn.click();
+            setTimeout(function () {
+              var runBtn = byText('返回运行态');
+              if (runBtn) runBtn.click();
+              setTimeout(function () {
+                var cards = qa('.purpose');
+                var target = null;
+                for (var i = 0; i < cards.length; i += 1) {
+                  var n = cards[i].querySelector('.purpose-name');
+                  if (n && n.textContent.trim() === '聊天组') { target = cards[i]; break; }
+                }
+                if (!target) { out.push('MISS | 找不到「聊天组」用途卡'); finish(); return; }
+                var enable = target.querySelector('.btn.primary');
+                if (!enable) { out.push('MISS | 「聊天组」没有启用按钮'); finish(); return; }
+                enable.click();
+                setTimeout(function () {
+                  mark('预检·决策面弹出', !!q('.pf') && txt('.pf').indexOf('启动预检') >= 0);
+                  mark('预检·四族齐全', qa('.pf-fam').length + qa('.pf-pass-row').length === 4,
+                    '待处理 ' + qa('.pf-fam').length + ' · 通过 ' + qa('.pf-pass-row').length);
+                  var resLine = (txt('.pf').match(/需要 [^，]*，余量 [^，]*，差 [^ ，]*/) || [''])[0];
+                  mark('预检·资源族算出差额', /差/.test(resLine), resLine);
+                  mark('预检·待处理族给出口动作', qa('.pf-acts button').length >= 1, qa('.pf-acts button').length + ' 个动作');
+                  mark('预检·强制启动写明降级后果', txt('.pf').indexOf('强制启动不会让显存变多') >= 0);
+                  mark('预检·来源可信度标注', txt('.pf').indexOf('来源：') >= 0);
+                  mark('Carbon·预检 0px 圆角', qa('.pf-fam, .pf-passed').every(function (e) {
+                    return getComputedStyle(e).borderTopLeftRadius === '0px';
+                  }));
+                  var cancel = byText('取消');
+                  if (cancel) cancel.click();
+                  finish();
+                }, 300);
+              }, 300);
+            }, 300);
+          }, 300);
         }
 
         setTimeout(phase1, 400);

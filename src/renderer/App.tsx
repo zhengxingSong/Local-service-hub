@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Settings, LogOut, SlidersHorizontal, ArrowLeft, RefreshCw } from 'lucide-react';
 import { AppConfig, DownloadResult, GpuInfo, ModelEntry, ServiceConfig, ServiceView } from './types';
+import { evaluatePreflight, PreflightAction, PreflightResult } from './preflight';
+import { PreflightDialog } from './components/PreflightDialog';
 import { ServiceCard, basename } from './components/ServiceCard';
 import { PurposeCard } from './components/PurposeCard';
 import { ResourceLedger } from './components/ResourceLedger';
@@ -32,6 +34,8 @@ export function App() {
   const [configNotice, setConfigNotice] = useState(false);
   /** 运行态是默认房间；配置态是显式进出的房间 */
   const [view, setView] = useState<'run' | 'config' | 'editor'>('run');
+  /** 预检未通过时的裁决面：result 是判定，run 是「人决定继续」时要执行的动作 */
+  const [pf, setPf] = useState<{ result: PreflightResult; run: () => void } | null>(null);
   const bannerTimer = useRef<number | null>(null);
 
   const showBanner = useCallback((kind: 'ok' | 'error', text: string) => {
@@ -116,35 +120,64 @@ export function App() {
     saveConfig({ ...config, services: { ...config.services, [id]: { ...svc, autostart: !svc.autostart } } });
   };
 
-  // 组互斥：启动独占组时，先确认停止其他运行中的组
-  const startPreset = async (name: string, members: string[]) => {
-    const exclusive = config?.exclusivePresets?.includes(name);
-    let proceed = true;
-    if (exclusive && config) {
-      const runningInOthers = services.filter((s) =>
-        s.state === 'running' &&
-        !members.includes(s.id) &&
-        Object.entries(config.presets).some(([n, m]) => n !== name && m.includes(s.id)),
-      );
-      if (runningInOthers.length > 0) {
-        const vram = runningInOthers.reduce(
-          (sum, s) => sum + (s.vramActualMB ?? s.vramEstimateMB ?? 0), 0,
-        );
-        proceed = window.confirm(
-          `「${name}」为独占预设组。将停止其他组正在运行的服务：\n\n` +
-          runningInOthers.map((s) => `  · ${s.label}`).join('\n') +
-          (vram > 0 ? `\n\n预计释放显存约 ${(vram / 1024).toFixed(1)} GB` : '') +
-          `\n\n确认停止后再启动「${name}」？`,
-        );
-        if (proceed) {
-          for (const s of runningInOthers) {
-            await doAction(() => api.stop(s.id), '已停止');
-          }
-        }
-      }
+  // 启动前的判断统一归预检（含独占组冲突），这里只负责「按顺序发起」。
+  const startPresetRaw = async (members: string[]) => {
+    for (const id of members) {
+      await doAction(() => api.start(id), `已启动 ${id}`);
     }
-    if (!proceed) return;
-    for (const id of members) void doAction(() => api.start(id), `已启动 ${id}`);
+  };
+
+  /** 预检门：通过就直接跑；不通过就摆出裁决面，让人决定 */
+  const gate = (
+    target: { kind: 'service' | 'group'; id: string; label: string },
+    memberIds: string[],
+    run: () => void,
+  ) => {
+    if (!config) { run(); return; }
+    const views: Record<string, ServiceView> = Object.fromEntries(services.map((s) => [s.id, s]));
+    const result = evaluatePreflight({ target, memberIds, services: views, config, gpu });
+    if (!result.blocked) { run(); return; }
+    setPf({ result, run });
+  };
+
+  /** 单个服务的启动都要过预检门 */
+  const gateService = (id: string) => {
+    gate(
+      { kind: 'service', id, label: config?.services[id]?.label || id },
+      [id],
+      () => void doAction(() => api.start(id), '服务已启动'),
+    );
+  };
+
+  /** 重新预检：用当前状态再判一次（例如刚停掉占用者之后） */
+  const recheckPreflight = () => {
+    setPf((prev) => {
+      if (!prev || !config) return prev;
+      const views: Record<string, ServiceView> = Object.fromEntries(services.map((s) => [s.id, s]));
+      const memberIds = prev.result.target.kind === 'service'
+        ? [prev.result.target.id]
+        : (config.presets[prev.result.target.id] ?? []);
+      return {
+        result: evaluatePreflight({ target: prev.result.target, memberIds, services: views, config, gpu }),
+        run: prev.run,
+      };
+    });
+  };
+
+  /** 决策面的就地出口：停占用者后立刻继续启动；其余出口把人送到能改的地方 */
+  const preflightAction = async (a: PreflightAction) => {
+    if (!pf) return;
+    const go = pf.run;
+    if (a.id === 'release' && a.target) {
+      await doAction(() => api.stop(a.target as string), '已停止占用者');
+      setPf(null);
+      go();
+      return;
+    }
+    if (a.id === 'locate') { setPf(null); setShowSettings(true); return; }
+    if (a.id === 'open-editor' && !a.target) { setPf(null); setView('config'); setShowPresets(true); return; }
+    if (a.target) { setPf(null); openEditor(a.target); return; }
+    setPf(null);
   };
 
   const stopPreset = (name: string, members: string[]) => {
@@ -384,12 +417,12 @@ export function App() {
                   exclusive={(config?.exclusivePresets ?? []).includes(name)}
                   sharedWith={sharedWith}
                   busy={busy}
-                  onEnable={() => void startPreset(name, ids)}
+                  onEnable={() => gate({ kind: 'group', id: name, label: name }, ids, () => void startPresetRaw(ids))}
                   onDisable={() => stopPreset(name, ids)}
                   onRestartAll={() => void restartPreset(ids)}
                   onEditGroup={() => setShowPresets(true)}
                   onDissolve={() => dissolvePreset(name)}
-                  onStartMember={(id) => void doAction(() => api.start(id), '服务已启动')}
+                  onStartMember={(id) => gateService(id)}
                   onStopMember={(id) => void doAction(() => api.stop(id), '服务已停止')}
                   onDetail={(id) => setLogId(id)}
                 />
@@ -405,7 +438,7 @@ export function App() {
                       key={svc.id}
                       svc={svc}
                       busy={busy}
-                      onStart={(id) => void doAction(() => api.start(id), '服务已启动')}
+                      onStart={(id) => gateService(id)}
                       onStop={(id) => void doAction(() => api.stop(id), '服务已停止')}
                       onRestart={(id) => void doAction(() => api.restart(id), '服务已重启')}
                       onEdit={(id) => setEditor({ id, cfg: config?.services[id] ?? null })}
@@ -431,6 +464,17 @@ export function App() {
         </div>
         )}
       </main>
+
+      {pf && (
+        <PreflightDialog
+          result={pf.result}
+          busy={busy}
+          onAction={(a) => void preflightAction(a)}
+          onRecheck={recheckPreflight}
+          onForce={() => { const go = pf.run; setPf(null); go(); }}
+          onCancel={() => setPf(null)}
+        />
+      )}
 
       {showSettings && config && (
         <SettingsPanel
