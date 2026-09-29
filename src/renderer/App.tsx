@@ -31,7 +31,7 @@ export function App() {
   const [logId, setLogId] = useState<string | null>(null);
   const [configNotice, setConfigNotice] = useState(false);
   /** 运行态是默认房间；配置态是显式进出的房间 */
-  const [view, setView] = useState<'run' | 'config'>('run');
+  const [view, setView] = useState<'run' | 'config' | 'editor'>('run');
   const bannerTimer = useRef<number | null>(null);
 
   const showBanner = useCallback((kind: 'ok' | 'error', text: string) => {
@@ -275,6 +275,18 @@ export function App() {
     }
   }
 
+  /** 端口 → 占用它的服务名：编辑器的「暴露与就绪」段用它做冲突提醒 */
+  const portOwners: Record<string, string> = {};
+  for (const [id, cfg] of Object.entries(config?.services ?? {})) {
+    if (cfg.port) portOwners[String(cfg.port)] = cfg.label || id;
+  }
+
+  /** 打开服务编辑（二级页）；id 为 null 表示新增 */
+  const openEditor = (id: string | null) => {
+    setEditor({ id, cfg: id && config ? config.services[id] ?? null : null });
+    setView('editor');
+  };
+
   return (
     <div className="app">
       <header className="header">
@@ -307,15 +319,33 @@ export function App() {
           </div>
         )}
 
-        {view === 'config' && config ? (
+        {view === 'editor' && config && editor ? (
+          <ServiceEditor
+            initial={editor.cfg}
+            initialId={editor.id}
+            existingIds={Object.keys(config.services)}
+            models={models}
+            llamaConfigured={llamaConfigured}
+            portOwners={portOwners}
+            onSave={(id, cfg) => {
+              const next = { ...config.services, [id]: cfg };
+              if (editor.id && editor.id !== id && config.services[editor.id]) delete next[editor.id];
+              saveConfig({ ...config, services: next });
+              setEditor(null);
+              setView('config');
+              showBanner('ok', `已保存 ${cfg.label || id}`);
+            }}
+            onCancel={() => { setEditor(null); setView('config'); }}
+          />
+        ) : view === 'config' && config ? (
           <ConfigView
             config={config}
             services={services}
             models={models}
             busy={busy}
             showModelPanel={showModelPanel}
-            onNewService={() => setEditor({ id: null, cfg: null })}
-            onEditService={(id) => setEditor({ id, cfg: config.services[id] ?? null })}
+            onNewService={() => openEditor(null)}
+            onEditService={(id) => openEditor(id)}
             onCopyService={copyService}
             onDeleteService={deleteService}
             onOpenLog={(id) => setLogId(id)}
@@ -401,23 +431,6 @@ export function App() {
         </div>
         )}
       </main>
-
-      {editor && config && (
-        <ServiceEditor
-          initial={editor.cfg}
-          initialId={editor.id}
-          existingIds={Object.keys(config.services)}
-          models={models}
-          llamaConfigured={llamaConfigured}
-          onSave={(id, cfg) => {
-            const services = { ...config.services, [id]: cfg };
-            if (editor.id && editor.id !== id && config.services[editor.id]) delete services[editor.id];
-            saveConfig({ ...config, services });
-            setEditor(null);
-          }}
-          onCancel={() => setEditor(null)}
-        />
-      )}
 
       {showSettings && config && (
         <SettingsPanel config={config} onSave={(cfg) => { saveConfig(cfg); setShowSettings(false); }} onCancel={() => setShowSettings(false)} />

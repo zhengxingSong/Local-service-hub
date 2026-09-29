@@ -196,7 +196,26 @@
               mark('Carbon·配置态 0px 圆角', qa('.cfg-table, .group-card').every(function (e) {
                 return getComputedStyle(e).borderTopLeftRadius === '0px';
               }));
-              finish();
+              if (tabs[0]) tabs[0].click();
+              setTimeout(function () {
+                var editBtn = qa('.cfg-rowacts button[title="编辑定义"]')[0];
+                if (!editBtn) { out.push('MISS | 找不到「编辑定义」入口'); finish(); return; }
+                editBtn.click();
+                setTimeout(function () {
+                  mark('服务编辑·六段导航', qa('.edit-nav .nav-i').length === 6, qa('.edit-nav .nav-i').length + ' 段');
+                  mark('服务编辑·六个分段', qa('.sec').length === 6, qa('.sec').length + ' 个');
+                  var segIds = ['form', 'prep', 'start', 'ready', 'req', 'policy'].filter(function (s) { return !!document.getElementById('sec-' + s); });
+                  mark('服务编辑·六段锚点齐全（摘要可跳转）', segIds.length === 6, segIds.join(','));
+                  mark('服务编辑·校验摘要常驻', !!q('.nav-sum') && /6 段中/.test(txt('.nav-sum')), txt('.nav-sum').slice(0, 36));
+                  mark('服务编辑·需求段给出四族', txt('#sec-req').indexOf('端口') >= 0 && txt('#sec-req').indexOf('依赖') >= 0);
+                  mark('服务编辑·准备段诚实标注未支持', /尚未支持|还不支持/.test(txt('#sec-prep')), txt('#sec-prep').slice(0, 30));
+                  mark('服务编辑·策略段区分启用与运行', txt('#sec-policy').indexOf('两个不同的状态位') >= 0);
+                  mark('Carbon·服务编辑 0px 圆角', qa('.sec, .edit-nav').every(function (e) {
+                    return getComputedStyle(e).borderTopLeftRadius === '0px';
+                  }));
+                  finish();
+                }, 300);
+              }, 250);
             }, 250);
           }, 250);
         }
