@@ -257,7 +257,7 @@ body {
   font-size: var(--type-sm-size);
 }
 .model-chip-name { font-weight: 400; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.model-chip-size { color: var(--color-ink-subtle); font-size: var(--type-sm-size); font-variant-numeric: tabular-nums; }
+.model-chip-size { color: var(--color-ink-muted); font-size: var(--type-sm-size); font-variant-numeric: tabular-nums; }
 .model-chip .btn { flex: none; }
 
 /* ---------- toolbar ---------- */
@@ -331,7 +331,9 @@ body {
   display: inline-flex;
   align-items: center;
   gap: var(--space-xxs);
-  color: var(--color-ink-subtle);
+  /* Carbon 的 gray-50(#8c8c8c) 是边框/禁用色，不是文字色：小字用它只有 3.36:1。
+     文字一律走 ink-muted(#525252, 7.81:1)。 */
+  color: var(--color-ink-muted);
   width: 52px;
   flex: none;
 }
