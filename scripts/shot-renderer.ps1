@@ -82,16 +82,21 @@ try {
     $ErrorActionPreference = $eap
     $m = [regex]::Match($dom, '<pre id="dshverifyout">([\s\S]*?)</pre>')
     if (-not $m.Success) { throw "probe output not found - the probe script did not run" }
-    $pass = 0; $fail = 0
+    $pass = 0; $fail = 0; $miss = 0
     foreach ($line in ($m.Groups[1].Value -split "`n")) {
       $t = $line.Trim(); if (-not $t) { continue }
       if ($t -like 'PASS*') { $pass++; Write-Host "  $t" -ForegroundColor Green }
       elseif ($t -like 'FAIL*') { $fail++; Write-Host "  $t" -ForegroundColor Red }
+      elseif ($t -like 'MISS*') {
+        # 找不到控件也是失败：否则探针会在什么都没测到的情况下报绿
+        $miss++; Write-Host "  $t" -ForegroundColor Red
+      }
       else { Write-Host "  $t" }
     }
-    if ($fail -eq 0) { Write-Host "verdict: PASS | pass $pass | fail 0" -ForegroundColor Green }
-    else {
-      Write-Host "verdict: FAIL | pass $pass | fail $fail" -ForegroundColor Red
+    if ($fail -eq 0 -and $miss -eq 0) {
+      Write-Host "verdict: PASS | pass $pass | fail 0" -ForegroundColor Green
+    } else {
+      Write-Host "verdict: FAIL | pass $pass | fail $fail | miss $miss" -ForegroundColor Red
       $probeFailed = $true
     }
   }

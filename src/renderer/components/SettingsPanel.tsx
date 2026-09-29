@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { AppConfig, SnapshotInfo } from '../types';
+import { ConfirmKind } from './ConfirmDialog';
 
 interface Props {
   config: AppConfig;
@@ -12,6 +13,8 @@ interface Props {
   restoreSnapshot: (name: string) => Promise<{ ok: boolean; config?: AppConfig }>;
   /** 恢复成功后把新配置交回上层（并重载服务） */
   onRestored: (cfg: AppConfig) => void;
+  /** 危险动作一律走同一个确认面，文案由 kind 决定 */
+  askConfirm: (kind: ConfirmKind, subject: string, onConfirm: () => void, extra?: string[]) => void;
 }
 
 function fmtTime(iso: string): string {
@@ -21,7 +24,7 @@ function fmtTime(iso: string): string {
   return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-export function SettingsPanel({ config, onSave, onCancel, listSnapshots, restoreSnapshot, onRestored }: Props) {
+export function SettingsPanel({ config, onSave, onCancel, listSnapshots, restoreSnapshot, onRestored, askConfirm }: Props) {
   const [llamaServerPath, setLlamaServerPath] = useState(config.llamaServerPath);
   const [scanRootsText, setScanRootsText] = useState(config.scanRoots.join('\n'));
   const [modelsRoot, setModelsRoot] = useState(config.modelsRoot ?? '');
@@ -57,13 +60,7 @@ export function SettingsPanel({ config, onSave, onCancel, listSnapshots, restore
     });
   };
 
-  const restore = async (snap: SnapshotInfo) => {
-    const when = fmtTime(snap.createdAt);
-    if (!window.confirm(
-      `恢复到 ${when} 的快照？\n\n` +
-      `当前配置会被覆盖，但覆盖前会自动再存一份（所以这一步可逆）。\n` +
-      `恢复后正在运行、但新配置里不存在的服务会被停止。`,
-    )) return;
+  const doRestore = async (snap: SnapshotInfo) => {
     setBusy(true);
     try {
       const res = await restoreSnapshot(snap.name);
@@ -78,6 +75,10 @@ export function SettingsPanel({ config, onSave, onCancel, listSnapshots, restore
     } finally {
       setBusy(false);
     }
+  };
+
+  const restore = (snap: SnapshotInfo) => {
+    askConfirm('restore-snapshot', fmtTime(snap.createdAt), () => void doRestore(snap));
   };
 
   const llamaConfigured = Boolean(llamaServerPath.trim() || scanRootsText.trim());

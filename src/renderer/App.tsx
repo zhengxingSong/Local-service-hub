@@ -11,6 +11,8 @@ import { PresetManager } from './components/PresetManager';
 import { ServiceEditor } from './components/ServiceEditor';
 import { SettingsPanel } from './components/SettingsPanel';
 import { ServiceDrawer } from './components/ServiceDrawer';
+import { ToastStack, Toast, TOAST_MAX } from './components/ToastStack';
+import { ConfirmDialog, ConfirmKind, ConfirmRequest } from './components/ConfirmDialog';
 import { Fix } from './diagnose';
 import { DownloadDialog } from './components/DownloadDialog';
 
@@ -25,7 +27,13 @@ export function App() {
   const [services, setServices] = useState<ServiceView[]>([]);
   const [gpu, setGpu] = useState<GpuInfo | null>(null);
   const [models, setModels] = useState<ModelEntry[]>([]);
-  const [banner, setBanner] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  /** 提示栈：成功自动消失，失败常驻（见 ToastStack 的说明） */
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastSeq = useRef(0);
+  /** 危险动作的确认请求：kind 决定文案 */
+  const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
+  /** 编辑器是从哪个房间进来的：返回时回到那里，而不是固定去配置态 */
+  const [editorFrom, setEditorFrom] = useState<'run' | 'config'>('config');
   const [busy, setBusy] = useState(false);
   const [editor, setEditor] = useState<EditorState>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -37,12 +45,33 @@ export function App() {
   const [view, setView] = useState<'run' | 'config' | 'editor'>('run');
   /** 预检未通过时的裁决面：result 是判定，run 是「人决定继续」时要执行的动作 */
   const [pf, setPf] = useState<{ result: PreflightResult; run: () => void } | null>(null);
-  const bannerTimer = useRef<number | null>(null);
+  const toastTimers = useRef<number[]>([]);
 
-  const showBanner = useCallback((kind: 'ok' | 'error', text: string) => {
-    setBanner({ kind, text });
-    if (bannerTimer.current !== null) window.clearTimeout(bannerTimer.current);
-    bannerTimer.current = window.setTimeout(() => setBanner(null), 4000);
+  const showToast = useCallback((kind: 'ok' | 'error', text: string) => {
+    toastSeq.current += 1;
+    const id = toastSeq.current;
+    setToasts((prev) => [...prev, { id, kind, text }].slice(-TOAST_MAX));
+    if (kind === 'ok') {
+      // 成功 4 秒后自己走；失败留在屏幕上等人处理
+      const timer = window.setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, 4000);
+      toastTimers.current.push(timer);
+    }
+  }, []);
+
+  const dismissToast = useCallback((id: number) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  /** 危险动作统一走确认面：每种动作有自己的文案（发生了什么 / 不会发生什么） */
+  const askConfirm = useCallback((
+    kind: ConfirmKind,
+    subject: string,
+    onConfirm: () => void,
+    extra?: string[],
+  ) => {
+    setConfirm({ kind, subject, onConfirm, extra });
   }, []);
 
   const refresh = useCallback(async () => {
@@ -52,9 +81,9 @@ export function App() {
       setServices(status.services ?? []);
       setGpu(status.gpu ?? null);
     } catch (err) {
-      showBanner('error', `状态加载失败: ${err instanceof Error ? err.message : String(err)}`);
+      showToast('error', `状态加载失败: ${err instanceof Error ? err.message : String(err)}`);
     }
-  }, [api, showBanner]);
+  }, [api, showToast]);
 
   // llama 能力是否可用：配置了 llama-server 或扫描根目录之一即认为使用 llama
   const llamaConfigured = Boolean(config && (config.llamaServerPath || (config.scanRoots?.length ?? 0) > 0));
@@ -93,17 +122,17 @@ export function App() {
   useEffect(() => api.onConfigChanged(() => setConfigNotice(true)), [api]);
 
   useEffect(() => () => {
-    if (bannerTimer.current !== null) window.clearTimeout(bannerTimer.current);
+    for (const t of toastTimers.current) window.clearTimeout(t);
   }, []);
 
   const doAction = async (action: () => Promise<unknown>, okText: string) => {
     setBusy(true);
     try {
       await action();
-      showBanner('ok', okText);
+      showToast('ok', okText);
       await refresh();
     } catch (err) {
-      showBanner('error', err instanceof Error ? err.message : String(err));
+      showToast('error', err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -170,7 +199,15 @@ export function App() {
     const id = logId;
     if (!id) return;
     if (f.id === 'retry') { setLogId(null); gateService(id); return; }
-    if (f.id === 'stop') { void doAction(() => api.stop(id), '已停止'); return; }
+    if (f.id === 'stop') {
+      // 正在反复重启时，停止会连带终止自动重启，属于危险动作
+      if (drawerSvc && (drawerSvc.state === 'restarting' || drawerSvc.state === 'failed')) {
+        askConfirm('stop-crashing', drawerSvc.label || id, () => { void doAction(() => api.stop(id), '已停止'); });
+      } else {
+        void doAction(() => api.stop(id), '已停止');
+      }
+      return;
+    }
     if (f.id === 'release' && f.target) {
       const target = f.target;
       void doAction(() => api.stop(target), '已停止占用者');
@@ -218,13 +255,14 @@ export function App() {
   /** 解散组：只解除组合关系，不删除任何服务 */
   const dissolvePreset = (name: string) => {
     if (!config) return;
-    if (!window.confirm(`解散预设组「${name}」？\n\n只解除组合关系，不会删除任何服务。`)) return;
-    const presets = { ...config.presets };
-    delete presets[name];
-    saveConfig({
-      ...config,
-      presets,
-      exclusivePresets: (config.exclusivePresets ?? []).filter((n) => n !== name),
+    askConfirm('dissolve-group', name, () => {
+      const presets = { ...config.presets };
+      delete presets[name];
+      saveConfig({
+        ...config,
+        presets,
+        exclusivePresets: (config.exclusivePresets ?? []).filter((n) => n !== name),
+      });
     });
   };
 
@@ -244,20 +282,25 @@ export function App() {
         [nextId]: { ...src, label: `${src.label} (副本)`, port, autostart: false },
       },
     });
-    showBanner('ok', `已复制为 ${nextId}（端口 ${port}）— 记得改成不同的模型或端口`);
+    showToast('ok', `已复制为 ${nextId}（端口 ${port}）— 记得改成不同的模型或端口`);
   };
 
   const deleteService = (id: string) => {
     if (!config) return;
-    if (!window.confirm(`删除服务 ${id}？将停止进程并移除配置。\n\n它不会删除模型文件；如果它属于某个预设组，也会从组里摘掉。`)) return;
-    const next = { ...config.services };
-    delete next[id];
-    // 从所有预设组里摘掉，避免留下悬空成员
-    const presets: Record<string, string[]> = {};
-    for (const [name, ids] of Object.entries(config.presets ?? {})) {
-      presets[name] = ids.filter((x) => x !== id);
-    }
-    saveConfig({ ...config, services: next, presets });
+    // 说清"会从哪些组里摘掉"，而不是笼统地说"会移除配置"
+    const affected = Object.entries(config.presets ?? {})
+      .filter(([, ids]) => ids.includes(id))
+      .map(([name]) => name);
+    askConfirm('delete-service', config.services[id]?.label || id, () => {
+      const next = { ...config.services };
+      delete next[id];
+      // 从所有预设组里摘掉，避免留下悬空成员
+      const presets: Record<string, string[]> = {};
+      for (const [name, ids] of Object.entries(config.presets ?? {})) {
+        presets[name] = ids.filter((x) => x !== id);
+      }
+      saveConfig({ ...config, services: next, presets });
+    }, affected.length > 0 ? [`会把它从这 ${affected.length} 个组里摘掉：${affected.join('、')}`] : []);
   };
 
   const startTrial = async (m: ModelEntry) => {
@@ -268,15 +311,15 @@ export function App() {
   const promote = async (id: string) => {
     const svc = services.find((s) => s.id === id);
     if (!svc) return;
-    if (!window.confirm(`将「${svc.label}」转正为持久服务？将使用与体验时相同的启动参数。`)) return;
+    // 转正是加法（写入一条持久配置并启动），不是危险动作，不需要确认面
     setBusy(true);
     try {
       const next = await api.promote({ trialId: id }) as AppConfig;
       setConfig(next);
-      showBanner('ok', `已转正为持久服务：${svc.label}`);
+      showToast('ok', `已转正为持久服务：${svc.label}`);
       await refresh();
     } catch (err) {
-      showBanner('error', err instanceof Error ? err.message : String(err));
+      showToast('error', err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -285,13 +328,14 @@ export function App() {
   const dropTrial = async (id: string) => {
     const svc = services.find((s) => s.id === id);
     if (!svc) return;
-    if (!window.confirm(`停止并移除体验服务「${svc.label}」？`)) return;
-    await doAction(() => api.dropTrial(id), '已移除体验服务');
+    askConfirm('drop-trial', svc.label || id, () => {
+      void doAction(() => api.dropTrial(id), '已移除体验服务');
+    });
   };
 
   const onDownloadDone = async (res: DownloadResult) => {
     setShowDownload(false);
-    showBanner('ok', `下载完成${res.sha256Verified ? '（SHA256 校验通过）' : ''}：${res.path ?? ''}`);
+    showToast('ok', `下载完成${res.sha256Verified ? '（SHA256 校验通过）' : ''}：${res.path ?? ''}`);
     await refreshModels(true);
     await refresh();
   };
@@ -300,10 +344,10 @@ export function App() {
     setConfigNotice(false);
     try {
       const res = await api.reloadConfig();
-      showBanner('ok', `已应用外部配置${res.restarted.length > 0 ? `，重启了 ${res.restarted.length} 个服务` : ''}`);
+      showToast('ok', `已应用外部配置${res.restarted.length > 0 ? `，重启了 ${res.restarted.length} 个服务` : ''}`);
       await refresh();
     } catch (err) {
-      showBanner('error', `应用配置失败: ${err instanceof Error ? err.message : String(err)}`);
+      showToast('error', `应用配置失败: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -335,8 +379,9 @@ export function App() {
     if (cfg.port) portOwners[String(cfg.port)] = cfg.label || id;
   }
 
-  /** 打开服务编辑（二级页）；id 为 null 表示新增 */
+  /** 打开服务编辑（二级页）；id 为 null 表示新增。记住来源，返回时回到进来的那个房间。 */
   const openEditor = (id: string | null) => {
+    setEditorFrom(view === 'run' ? 'run' : 'config');
     setEditor({ id, cfg: id && config ? config.services[id] ?? null : null });
     setView('editor');
   };
@@ -362,12 +407,15 @@ export function App() {
           </button>
         )}
         <button className="btn ghost" onClick={() => setShowSettings(true)}><Settings size={15} /> 设置</button>
-        <button className="btn ghost" onClick={() => void api.quit()}><LogOut size={15} /> 退出</button>
+        <button
+          className="btn ghost"
+          onClick={() => askConfirm('quit', '', () => void api.quit())}
+        >
+          <LogOut size={15} /> 退出
+        </button>
       </header>
 
       <main className="main">
-        {banner && <div className={`banner ${banner.kind}`}>{banner.text}</div>}
-
         {configNotice && (
           <div className="notice-bar">
             <span>检测到 services.json 被外部修改。</span>
@@ -389,10 +437,10 @@ export function App() {
               if (editor.id && editor.id !== id && config.services[editor.id]) delete next[editor.id];
               saveConfig({ ...config, services: next });
               setEditor(null);
-              setView('config');
-              showBanner('ok', `已保存 ${cfg.label || id}`);
+              setView(editorFrom);
+              showToast('ok', `已保存 ${cfg.label || id}`);
             }}
-            onCancel={() => { setEditor(null); setView('config'); }}
+            onCancel={() => { setEditor(null); setView(editorFrom); }}
           />
         ) : view === 'config' && config ? (
           <ConfigView
@@ -465,14 +513,8 @@ export function App() {
                       onStart={(id) => gateService(id)}
                       onStop={(id) => void doAction(() => api.stop(id), '服务已停止')}
                       onRestart={(id) => void doAction(() => api.restart(id), '服务已重启')}
-                      onEdit={(id) => setEditor({ id, cfg: config?.services[id] ?? null })}
-                      onDelete={(id) => {
-                        if (!config) return;
-                        if (!window.confirm(`删除服务 ${id}？将停止进程并移除配置。`)) return;
-                        const next = { ...config.services };
-                        delete next[id];
-                        saveConfig({ ...config, services: next });
-                      }}
+                      onEdit={(id) => openEditor(id)}
+                      onDelete={(id) => deleteService(id)}
                       onToggleAutostart={toggleAutostart}
                       onOpenLog={(id) => setLogId(id)}
                       onPromote={(id) => void promote(id)}
@@ -508,6 +550,7 @@ export function App() {
           listSnapshots={() => api.listSnapshots()}
           restoreSnapshot={(name) => api.restoreSnapshot(name)}
           onRestored={(cfg) => setConfig(cfg)}
+          askConfirm={askConfirm}
         />
       )}
 
@@ -546,6 +589,14 @@ export function App() {
           clearRuns={(serviceId) => api.clearRuns(serviceId)}
         />
       )}
+
+      {confirm && <ConfirmDialog req={confirm} onCancel={() => setConfirm(null)} />}
+
+      <ToastStack
+        toasts={toasts}
+        onDismiss={dismissToast}
+        onClearAll={() => setToasts([])}
+      />
     </div>
   );
 }

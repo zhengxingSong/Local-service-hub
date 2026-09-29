@@ -893,6 +893,56 @@ hr.sep { border: none; border-top: 1px solid var(--color-hairline); margin: var(
 .runout.stopped { color: var(--color-ink-muted); }
 .drawer .cfg-table { font-size: var(--type-sm-size); }
 
+/* ---------- Toast 栈：成功自动走，失败常驻 ---------- */
+.toasts {
+  position: fixed; right: var(--space-md); bottom: var(--space-md);
+  z-index: 60;
+  display: flex; flex-direction: column; gap: var(--space-xxs);
+  width: 360px; max-width: calc(100vw - 32px);
+  align-items: stretch;
+}
+.toast {
+  display: flex; align-items: flex-start; gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline-strong);
+  font-size: var(--type-sm-size);
+  color: var(--color-ink);
+  line-height: 1.45;
+}
+.toast svg { flex: none; margin-top: 2px; }
+.toast-text { flex: 1; min-width: 0; word-break: break-word; }
+.toast.error { background: var(--color-error-light); border-color: var(--color-error); }
+.toast.ok { background: var(--color-success-light); border-color: var(--color-success); }
+.toast-x {
+  flex: none; border: none; background: transparent; cursor: pointer;
+  color: var(--color-ink-muted); padding: 0; line-height: 1;
+}
+.toast-x:hover { color: var(--color-ink); }
+.toast-clear {
+  align-self: flex-end;
+  border: none; background: transparent; cursor: pointer;
+  font-family: var(--type-body-font); font-size: var(--type-sm-size);
+  color: var(--color-ink-muted); text-decoration: underline;
+}
+
+/* ---------- 危险确认面：说清"会发生什么"与"不会发生什么" ---------- */
+.confirm { width: 520px; max-width: calc(100vw - 32px); }
+.confirm .panel-title { display: flex; align-items: center; gap: var(--space-xs); }
+.confirm-body { padding: var(--space-sm) var(--space-md); display: flex; flex-direction: column; gap: var(--space-sm); }
+.confirm-sec { display: flex; flex-direction: column; gap: var(--space-xxs); }
+.confirm-h { font-size: var(--type-sm-size); font-weight: var(--type-emphasis-weight); }
+.confirm-line { font-size: var(--type-sm-size); color: var(--color-ink); line-height: 1.5; padding-left: var(--space-sm); position: relative; }
+.confirm-line::before { content: '·'; position: absolute; left: 2px; }
+.confirm-line.muted { color: var(--color-ink-muted); display: flex; align-items: flex-start; gap: var(--space-xxs); }
+.confirm-line.muted::before { content: ''; }
+.confirm-line.muted svg { flex: none; margin-top: 3px; color: var(--color-success); }
+.confirm-foot {
+  display: flex; align-items: center; gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid var(--color-hairline);
+}
+
 /* ---------- 退化：窄窗口 ---------- */
 @media (max-width: 1180px) {
   .run-grid { grid-template-columns: 1fr; }

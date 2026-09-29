@@ -333,8 +333,67 @@
             }));
             var closeBtn = q('.drawer-h button');
             if (closeBtn) closeBtn.click();
-            finish();
+            phase7();
           }, 400);
+        }
+
+        /* 阶段七：危险确认面 + Toast + 未分组卡片的编辑入口 */
+        function phase7() {
+          var editBtns = qa('.card-actions button').filter(function (b) { return b.textContent.trim() === '编辑'; });
+          if (!editBtns.length) { out.push('MISS | 未分组卡片没有「编辑」入口'); finish(); return; }
+          editBtns[0].click();
+          setTimeout(function () {
+            mark('未分组卡片·「编辑」真的打开编辑器', !!q('.edit-nav') && qa('.sec').length === 6, qa('.sec').length + ' 段');
+            var back = q('.edit-h .btn');
+            if (back) back.click();
+            setTimeout(function () {
+              var delBtns = qa('.card-actions button').filter(function (b) { return b.textContent.trim() === '删除'; });
+              if (!delBtns.length) { out.push('MISS | 未分组卡片没有「删除」入口'); finish(); return; }
+              delBtns[0].click();
+              setTimeout(function () {
+                var c = txt('.confirm');
+                mark('确认面·弹出并使用专属文案', !!q('.confirm') && c.indexOf('删除服务「') >= 0, c.slice(0, 34));
+                mark('确认面·说清会发生什么', c.indexOf('会发生什么') >= 0 && c.indexOf('从所属的预设组里摘掉') >= 0);
+                mark('确认面·说清不会发生什么', c.indexOf('不会发生什么') >= 0 && c.indexOf('不会删除模型文件') >= 0);
+                mark('确认面·未分组的服务不编造组信息', c.indexOf('个组里摘掉') < 0, c.indexOf('个组里摘掉') < 0 ? '未分组，未提组' : '不该提组却提了');
+                mark('Carbon·确认面 0px 圆角', qa('.confirm, .confirm-line').every(function (e) {
+                  return getComputedStyle(e).borderTopLeftRadius === '0px';
+                }));
+                var cancel = byText('取消');
+                if (cancel) cancel.click();
+                setTimeout(function () {
+                  delBtns[0].click();
+                  setTimeout(function () {
+                    var go = byText('删除服务');
+                    if (!go) { out.push('MISS | 确认面没有「删除服务」按钮'); finish(); return; }
+                    go.click();
+                    setTimeout(function () {
+                      mark('Toast·动作后出现提示', qa('.toast').length >= 1, qa('.toast').length + ' 条：' + txt('.toast').slice(0, 24));
+                      mark('Carbon·Toast 0px 圆角', qa('.toast').every(function (e) {
+                        return getComputedStyle(e).borderTopLeftRadius === '0px';
+                      }));
+                      // 对照：分组服务的删除必须说清"会从哪些组里摘掉"
+                      var cfgBtn2 = byText('配置');
+                      if (cfgBtn2) cfgBtn2.click();
+                      setTimeout(function () {
+                        var del2 = qa('.cfg-rowacts button[title="删除服务"]');
+                        if (!del2.length) { out.push('MISS | 配置态找不到删除入口'); finish(); return; }
+                        del2[0].click();
+                        setTimeout(function () {
+                          var c2 = txt('.confirm');
+                          mark('确认面·分组服务补充「从哪些组摘掉」', c2.indexOf('个组里摘掉') >= 0,
+                            (c2.match(/会把它从这[^、]*、?[^、]*/) || [''])[0]);
+                          var cancel2 = byText('取消');
+                          if (cancel2) cancel2.click();
+                          finish();
+                        }, 300);
+                      }, 400);
+                    }, 400);
+                  }, 300);
+                }, 300);
+              }, 300);
+            }, 300);
+          }, 300);
         }
 
         setTimeout(phase1, 400);
