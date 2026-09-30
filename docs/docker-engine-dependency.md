@@ -53,7 +53,16 @@ docker desktop status     # 查状态
 
 外加打开 Desktop 的登录自启（Settings → General → "Start Docker Desktop when you sign in"），引擎就会常驻，窗口不必出现。
 
-**未验证项**：我**没有运行** `docker desktop start`（按你"只诊断"的要求）。因此"它是否完全不弹窗、只进托盘"**是文档说法，不是我实测的结论**。这一点值得你在方便时亲自试一次。
+**已实测（2026-10-01，走路由 2 时验证）**：`docker desktop start` **会把 Docker Desktop 的窗口打开**。
+证据：执行后 `Docker Desktop.exe` 出现 4 个进程（06:09:07 启动），其中 pid 10980 持有主窗口句柄 461062，
+标题为 **`Containers - Docker Desktop`**。也就是说它起的是**应用本身**，不是无界面的引擎。
+
+`docker desktop start --help` 只有 `-d/--detach` 与 `--timeout`，**没有**抑制窗口的参数。
+
+**要让它真正不出现窗口**：Docker Desktop → Settings → General → 取消勾选
+**"Open Docker Dashboard when Docker Desktop starts"**。该设置当前未写入 `settings-store.json`
+（文件里 11 个键都没有这一类），即使用默认值 → 默认是打开面板。取消勾选后，`docker desktop start`
+只把引擎拉起来、不弹面板。**此项未实测**（改的是 Docker 的设置，未在本次诊断中执行）。
 
 ### 路 2：让「服务中枢」代你管引擎（与产品前提最一致）
 
@@ -95,7 +104,7 @@ docker desktop status     # 查状态
 
 1. **`AutoStart=false` 与注册表 Run 项并存**：可能是 GUI 里已关闭但 Run 项是残留，也可能键名不同导致我读错了字段。**确认方法**：打开 Desktop → Settings → General，看那一项的勾选状态。
 2. **`Ubuntu-22.04` 里的 `docker` 现在是谁**：如果 Desktop 的 WSL 集成是开着的，那里面的 `docker` 通常是 Desktop 注入的客户端（不是原生引擎）。**确认方法**：`wsl -d Ubuntu-22.04 -- sh -c 'which docker; docker context ls; ls -l /var/run/docker.sock'`（会启动该发行版）。
-3. **`docker desktop start` 是否真的不弹窗**（见路 1 的未验证项）。
+3. ~~**`docker desktop start` 是否真的不弹窗**~~ → **已实测：会弹窗**（见第四节路 1）。要消除需取消勾选 Dashboard 设置。
 4. **`docker desktop engine ls`** 能列出可切换的引擎模式（Windows 专有命令），但需要 Desktop 在后端运行才能查。
 
 ## 七、决策判据
