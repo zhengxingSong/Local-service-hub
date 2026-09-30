@@ -1,4 +1,4 @@
-# Screenshot the REAL renderer (built app shell) headlessly.
+﻿# Screenshot the REAL renderer (built app shell) headlessly.
 #
 #   .\shot-renderer.ps1                      -> dist\renderer\..\shots\real-app.png
 #   .\shot-renderer.ps1 -Out C:\tmp\a.png -Width 1440 -Height 900
@@ -41,10 +41,38 @@ Write-Host "verify page: $verify  (js=$js css=$css)" -ForegroundColor Cyan
 if (-not $Out) { $Out = Join-Path $root 'docs\design\preview\shots\7-real-app-carbon.png' }
 $Out = [System.IO.Path]::GetFullPath($Out)
 
-$py = 'C:\Users\7\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\python\python.exe'
-$chrome = 'C:\Program Files\Google\Chrome\Application\chrome.exe'
-if (-not (Test-Path $py))     { throw "python not found: $py" }
-if (-not (Test-Path $chrome)) { throw "chrome not found: $chrome" }
+# Locate Python and Chrome: env override first, then PATH, then known local paths.
+# Env overrides keep this working on machines whose paths differ; the local paths
+# are only a last-resort fallback. This file stays ASCII-only on purpose:
+# Windows PowerShell reads .ps1 as ANSI unless it has a BOM, so non-ASCII text here
+# corrupts strings and breaks parsing.
+function Resolve-Tool {
+  param([string]$Override, [string[]]$Candidates, [string]$Exe)
+  if ($Override -and (Test-Path $Override)) { return $Override }
+  foreach ($c in $Candidates) { if ($c -and (Test-Path $c)) { return $c } }
+  $cmd = Get-Command $Exe -ErrorAction SilentlyContinue
+  if ($cmd) { return $cmd.Source }
+  return $null
+}
+
+$py = Resolve-Tool -Override $env:DSH_PYTHON -Exe 'python' -Candidates @(
+  'C:\Users\7\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\python\python.exe',
+  "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
+  "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe"
+)
+$chrome = Resolve-Tool -Override $env:DSH_CHROME -Exe 'chrome' -Candidates @(
+  'C:\Program Files\Google\Chrome\Application\chrome.exe',
+  'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
+  "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
+)
+if (-not $py) {
+  throw "python not found. Install one, or set `$env:DSH_PYTHON (the script needs it to serve the build over HTTP)."
+}
+if (-not $chrome) {
+  throw "chrome not found. Install it, or set `$env:DSH_CHROME. Chrome refuses <script type=module> over file:// (CORS), so this must go through HTTP."
+}
+Write-Host "python: $py" -ForegroundColor DarkGray
+Write-Host "chrome: $chrome" -ForegroundColor DarkGray
 
 $srv = Start-Process -FilePath $py -ArgumentList '-m', 'http.server', "$Port", '--bind', '127.0.0.1' `
   -WorkingDirectory $dist -PassThru -WindowStyle Hidden

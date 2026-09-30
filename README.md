@@ -40,12 +40,69 @@ llama 相关能力（模型扫描、一键体验、显存估算、GGUF 下载器
 
 端口被占用时，只有能识别实例身份的判定（`openai-models` / `http`）允许「接管」已有实例；纯 `tcp` 判定无法确认身份，一律按端口冲突报错，避免把无关进程当成自己的服务。
 
+## 快速开始（clone → 跑起来 → 打包）
+
+前置：Windows、Node ≥ 22、pnpm。运行时依赖为空（`lucide-react` 等只在构建期使用）。
+
+```bash
+git clone https://github.com/zhengxingSong/Local-service-hub.git
+cd Local-service-hub
+pnpm install          # Electron 二进制走 .npmrc 里固定的 npmmirror 镜像（直连 GitHub 会失败）
+pnpm start            # 构建 main + preload + renderer，然后启动应用
+```
+
+只改界面时不必反复重启 Electron：
+
+```bash
+pnpm run dev:renderer    # Vite 开发服务器，渲染层热更新
+pnpm run typecheck       # tsc --noEmit
+pnpm test                # vitest
+pnpm run build           # 只构建，不启动
+```
+
+### 打包，以及「为什么改了代码却看不到变化」
+
+```bash
+pnpm run dist            # 构建 + electron-builder
+# 产物：release\服务中枢-Setup-<version>.exe（版本号取 package.json 的 version）
+```
+
+**打包不等于生效。** 源码在仓库里，而桌面快捷方式指向的是**已安装副本**
+`%LOCALAPPDATA%\Programs\service-hub`，代码封在 `resources\app.asar` 里。
+改完代码必须**重新打包并安装**，否则双击快捷方式启动的仍是旧那一份——这是本项目最容易踩的坑。
+
+判断已安装副本是新是旧（把 `purpose-avail` 换成任意只有新版本才有的类名或字符串）：
+
+```powershell
+$asar = "$env:LOCALAPPDATA\Programs\service-hub\resources\app.asar"
+[Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($asar)).Contains('purpose-avail')
+# False = 已安装的是旧版本，需要重装
+```
+
+安装前需**退出正在运行的应用**（安装器要替换 exe 与 app.asar）。安装器是 per-user、非一键式，
+会创建桌面与开始菜单快捷方式。静默安装：`.\release\服务中枢-Setup-<version>.exe /S`。
+
+### 验证真实界面（渲染探针）
+
+这个仓库的界面验证不靠"看截图"，而是把**构建产物**渲染出来做 DOM 断言 + 像素核对
+（模板里 87 条断言，实测 86 通过；覆盖运行态/配置态/服务编辑/设置/预检/抽屉/确认面/探测/组编辑）：
+
+```powershell
+.\scripts\shot-renderer.ps1 -Probe
+```
+
+它给内置 API 打桩 → 用本机 HTTP 提供构建产物 → 截图 → 断言结构与 Carbon 不变式 → 自清临时文件。
+脚本会自动探测 Python 与 Chrome（也可用 `$env:DSH_PYTHON` / `$env:DSH_CHROME` 指定）。
+
+> `file://` 下 Chrome 会因 CORS 拒绝加载 `<script type="module">`，页面会是纯白——
+> Electron 允许 `file://`，浏览器不允许，所以这个脚本必须走本机 HTTP。
+
 ## 开发
 
 ```bash
 pnpm install             # 依赖（Electron 二进制走 npmmirror 镜像）
 pnpm run typecheck       # tsc --noEmit
-pnpm test                # vitest（88 项单元测试，不需要 Electron 与网络）
+pnpm test                # vitest（143 项单元测试，不需要 Electron 与网络）
 pnpm run build           # 构建 main + preload + renderer
 pnpm run build:main      # 仅主进程（并把托盘图标复制进 dist）
 pnpm run dev:renderer    # 仅渲染层 Vite 开发服务器
