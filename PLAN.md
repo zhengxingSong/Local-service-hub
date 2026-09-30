@@ -6,7 +6,7 @@
 > 相关的用户数据已迁移到 `%APPDATA%\服务中枢`。
 
 独立 Electron 桌面应用（非 DSH 插件），管理并启动 llama.cpp 模型服务。
-工程目录：`D:\LLM Model\llama.cpp\desktop\`
+工程目录：`F:\Project\General\Local service hub\`
 
 ## 已确认决策
 

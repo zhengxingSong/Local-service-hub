@@ -12,8 +12,8 @@ hairline #e0e0e0 / ink #161616 / primary #0f62fe。
 from PIL import Image, ImageDraw
 import io
 
-OUT = r"D:\LLM Model\llama.cpp\desktop\resources"
-PREVIEW = r"D:\LLM Model\llama.cpp\desktop\docs\design\preview\shots"
+OUT = r"F:\Project\General\Local service hub\resources"
+PREVIEW = r"F:\Project\General\Local service hub\docs\design\preview\shots"
 MASTER = 1024
 SIZES = [16, 24, 32, 48, 64, 128, 256]
 TRAY_SIZES = [16, 20, 24, 32, 48]
