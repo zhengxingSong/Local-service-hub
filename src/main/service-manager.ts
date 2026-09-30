@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import { ensureEngine } from './docker-engine';
 import net from 'node:net';
 import { existsSync } from 'node:fs';
 import { basename, dirname } from 'node:path';
@@ -364,6 +365,20 @@ export class ServiceManager {
       svc.stopping = false;
       this.notify();
       const docker = findDocker();
+      // 引擎不在时先把它拉起来再跑 compose：不该为了启动一个容器栈去手动打开 Docker Desktop。
+      // 失败时给出"引擎不可用"这个明确原因——否则用户看到的只是含糊的 compose 失败。
+      const engine = await ensureEngine({
+        docker,
+        capture: (cmd, args, opts) => this.runCapture(cmd, args, opts),
+        log: (line) => this.appendLog(id, line),
+      });
+      if (!engine.ok) {
+        svc.state = 'failed';
+        svc.lastError = `Docker 引擎不可用：${engine.detail}`;
+        svc.endedAt = new Date().toISOString();
+        this.notify();
+        throw new Error(svc.lastError);
+      }
       const args = [...composeBaseArgs(svc.config), 'up', '-d', '--remove-orphans'];
       this.appendLog(id, `>>> ${docker} ${args.join(' ')}\n`);
       const res = await this.runCapture(docker, args, { cwd: svc.config.composeDir!, env: svc.config.env });
